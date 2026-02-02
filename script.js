@@ -28,28 +28,27 @@ function initTable() {
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
         const isActive = gameState.activePlayers[i];
+
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
 
-        // 座標設定 (這裡保留您原本的 CSS 佈局，或動態計算)
-        // 注意：為了讓 D button 飛到正確位置，seat 必須有相對定位或固定位置
-
-        let labelText = `P${i}`;
-        if (i === 1) labelText = "你 (Hero)";
+        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
         const statusText = isActive ? "(參加)" : "(休息)";
 
         seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
-        // 在 label 內預留一個 span 給位置標籤 (id="badge-pX")
         seat.innerHTML = `
             <div class="seat-label" onclick="event.stopPropagation(); togglePlayer(${i})">
                 ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
-                <div id="badge-p${i}" style="display:inline-block; margin-left:5px;"></div>
             </div>
+            
+            <div id="badge-p${i}" class="badge-container" style="min-height:20px; margin-bottom:4px;"></div>
+            
             <div style="display:flex; gap:4px; justify-content:center; pointer-events:none;">
                 <div class="card empty" id="p${i}c1">?</div>
                 <div class="card empty" id="p${i}c2">?</div>
             </div>
+            
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
         placeholder.appendChild(seat);
