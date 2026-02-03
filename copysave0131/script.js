@@ -13,7 +13,8 @@ let gameState = {
     activeGroup: null,
     currentPickingTarget: null,
     activePlayers: { 1: true }, // 預設只有 P1
-    dealerPos: 1                // 預設莊家在 P1
+    dealerPos: 1,                // 預設莊家在 P1
+    foldedPlayers: {} // 新增：紀錄哪些座位已棄牌 { 1: true, 3: true... }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,39 +22,98 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePositions(); // 初始化位置
 });
 
+/**
+ * [功能] 初始化桌面座位、按鈕與玩家狀態
+ * 確保只要玩家是「參加」狀態，無論何時都顯示 Fold 按鈕
+ */
 function initTable() {
     const placeholder = document.getElementById('seats-placeholder');
+    if (!placeholder) return;
+
     placeholder.innerHTML = '';
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
+
+        // --- 1. 取得最新狀態 ---
         const isActive = gameState.activePlayers[i];
+        // 確保 foldedPlayers 物件存在，避免讀取錯誤
+        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i];
+
+        // --- 2. 核心修正：定義顯示邏輯 ---
+        // 只要是參加者 (isActive)，就顯示按鈕，不論有無選牌
+        // 判斷桌面上是否已經有任何牌被選了 (代表遊戲進行中)
+        const isGameStarted = Object.keys(gameState.selectedCards).length > 0;
+
+        // 只要是參加者 (isActive) 且遊戲已開始，就顯示按鈕
+        const foldBtnStyle = (isActive && isGameStarted) ? "display:inline-block;" : "display:none;";
+        const foldBtnText = isFolded ? "復原" : "Fold";
+
+        // 標籤文字
+        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
+        let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
+
+        // 卡片視覺效果
+        const foldClass = (isActive && isFolded) ? 'folded' : '';
+
+        // --- 3. 設定座位基本屬性 ---
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
-
-        // 座標設定 (這裡保留您原本的 CSS 佈局，或動態計算)
-        // 注意：為了讓 D button 飛到正確位置，seat 必須有相對定位或固定位置
-
-        let labelText = `P${i}`;
-        if (i === 1) labelText = "你 (Hero)";
-        const statusText = isActive ? "(參加)" : "(休息)";
-
+        // 點擊座位整體仍可開啟選牌器
         seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
-        // 在 label 內預留一個 span 給位置標籤 (id="badge-pX")
+        // --- 4. 產生 HTML 結構 ---
         seat.innerHTML = `
-            <div class="seat-label" onclick="event.stopPropagation(); togglePlayer(${i})">
-                ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
-                <div id="badge-p${i}" style="display:inline-block; margin-left:5px;"></div>
+            <div class="seat-label" onclick="event.stopPropagation();">
+                <span onclick="togglePlayer(${i})">
+                    ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
+                </span>
+                
+                <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
+                        style="${foldBtnStyle} margin-left:8px; vertical-align:middle;"
+                        onclick="event.stopPropagation(); toggleFold(${i})">
+                    ${foldBtnText}
+                </button>
             </div>
+            
+            <div id="badge-p${i}" class="badge-container" style="min-height:20px; margin-bottom:4px;"></div>
+            
             <div style="display:flex; gap:4px; justify-content:center; pointer-events:none;">
-                <div class="card empty" id="p${i}c1">?</div>
-                <div class="card empty" id="p${i}c2">?</div>
+                <div class="card empty ${foldClass}" id="p${i}c1">?</div>
+                <div class="card empty ${foldClass}" id="p${i}c2">?</div>
             </div>
+            
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
+
+        // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
+
+        // --- 6. 更新卡片視覺 (確保選過的牌能顯示出來) ---
+        if (typeof updateCardVisuals === 'function') {
+            updateCardVisuals(i);
+        }
     }
+
+    // 初始化莊家/SB/BB位置
+    if (typeof updatePositions === 'function') {
+        updatePositions();
+    }
+}
+
+// 新增一個輔助函式來恢復卡片顯示 (不然 initTable 會把牌變回 ?)
+function updateCardVisuals(playerId) {
+    ['c1', 'c2'].forEach(suffix => {
+        const key = `p${playerId}${suffix}`;
+        const cardVal = gameState.selectedCards[key];
+        const el = document.getElementById(key);
+        if (cardVal && el) {
+            el.className = `card ${gameState.foldedPlayers[playerId] ? 'folded' : ''}`;
+            const suit = cardVal.slice(-1);
+            el.classList.add(suitColors[suit]);
+            el.innerText = cardVal;
+        }
+    });
 }
 
 /* =========================================
@@ -338,6 +398,7 @@ function handleCardClick(cardStr, isUsed, usedById, isOwnedByMe) {
         autoSetTargetToFirstEmpty();
 
         renderSelector();
+        initTable();
     } else {
         // 如果目前沒有目標 (例如 5 張已滿)，但使用者點擊了一張沒被選過的牌
         // 這裡可以選擇不動作，或者提示使用者先刪除一張
@@ -371,17 +432,79 @@ function closeSelector() {
 }
 
 /**
- * [功能] 清空目前桌面所有設定
- * [原理] 重新載入頁面以達到完全初始化
+ * [功能] 切換玩家棄牌狀態
  */
-function resetTable() {
-    if (confirm("確定要清空桌面所有卡片與設定嗎？")) {
-        location.reload();
+function toggleFold(playerId) {
+    // 只有參加中的玩家可以 Fold
+    if (!gameState.activePlayers[playerId]) return;
+
+    // 切換棄牌狀態
+    if (gameState.foldedPlayers[playerId]) {
+        delete gameState.foldedPlayers[playerId];
+    } else {
+        gameState.foldedPlayers[playerId] = true;
+    }
+
+    // 重要：狀態改變後要重新渲染桌面，按鈕文字才會從 Fold 變成 復原
+    initTable();
+
+    // 如果有選牌，就順便更新勝率 (選用)
+    if (Object.keys(gameState.selectedCards).length > 0) {
+        calculateOdds();
     }
 }
 
+/**
+ * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
+ */
+function resetTable() {
+    // 增加確認對話框，避免誤觸
+    if (!confirm("確定要清空桌面上的牌嗎？(玩家設定將保留)")) return;
+
+    // 1. 清空記憶體中的選牌資料
+    gameState.selectedCards = {};
+    gameState.foldedPlayers = {}; // 新增：重置所有棄牌狀態
+
+    // 2. 重置公牌區域 (b0 - b4)
+    for (let i = 0; i < 5; i++) {
+        const el = document.getElementById(`b${i}`);
+        if (el) {
+            el.className = 'card empty'; // 移除花色樣式，變回虛線框
+            el.innerText = '?';          // 文字變回問號
+        }
+    }
+
+    // 3. 重置所有玩家的手牌與勝率 (p1 - p9)
+    for (let i = 1; i <= 9; i++) {
+        // 重置兩張手牌
+        ['c1', 'c2'].forEach(suffix => {
+            const el = document.getElementById(`p${i}${suffix}`);
+            if (el) {
+                el.className = 'card empty';
+                el.innerText = '?';
+            }
+        });
+
+        // 重置勝率顯示
+        const winEl = document.getElementById(`win-p${i}`);
+        if (winEl) {
+            winEl.innerText = '--%';
+            winEl.style.color = ''; // 移除顏色設定
+        }
+    }
+
+    // 4. 更新狀態列提示
+    const statusText = document.getElementById('status-text');
+    if (statusText) {
+        statusText.innerText = "桌面已清空，請開始新的一局";
+    }
+    // 建議在 resetTable 最後加這一行來刷新 UI
+    initTable();
+}
+
+
 /* =========================================
-   3. 核心運算 (維持不變)
+   3. 核心運算 (提高次數)
    ========================================= */
 /**
  * [功能] 計算所有活躍玩家的勝率
@@ -400,16 +523,31 @@ function calculateOdds() {
 }
 
 function runSimulation(playerIds) {
-    const iterations = 5000; // 模擬次數
+    const iterations = 50000;
     const wins = {};
-    playerIds.forEach(id => wins[id] = 0);
+
+    // 1. 過濾出「真正參與比牌」的玩家 (排除 Fold 的人)
+    // 雖然 playerIds 傳進來的是所有 Active 的人，但我們要扣掉 Fold 的
+    const activeContestants = playerIds.filter(id => !gameState.foldedPlayers[id]);
+
+    // 初始化計分板
+    activeContestants.forEach(id => wins[id] = 0);
+
+    // 如果沒人玩或只剩 0 人，直接結束
+    if (activeContestants.length === 0) {
+        document.getElementById('status-text').innerText = "沒有活躍玩家可計算";
+        return;
+    }
 
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
 
+    // 2. 關鍵：knownCards 包含「所有」桌上的牌 (包含已 Fold 玩家的牌)
+    // 這保證了 Fold 掉的牌不會被重新發出來
     const knownCards = Object.values(gameState.selectedCards);
 
     for (let i = 0; i < iterations; i++) {
+        // 從牌堆移除已知牌 (包含 Fold 的牌)
         let deck = fullDeck.filter(c => !knownCards.includes(c));
 
         // 洗牌
@@ -429,10 +567,12 @@ function runSimulation(playerIds) {
         let bestScore = -1;
         let winners = [];
 
-        playerIds.forEach(pid => {
+        // 3. 只計算「沒 Fold」的玩家的分數
+        activeContestants.forEach(pid => {
             let c1 = gameState.selectedCards[`p${pid}c1`];
             let c2 = gameState.selectedCards[`p${pid}c2`];
 
+            // 補牌
             if (!c1) c1 = deck.pop();
             if (!c2) c2 = deck.pop();
 
@@ -448,18 +588,27 @@ function runSimulation(playerIds) {
         winners.forEach(pid => wins[pid] += 1 / winners.length);
     }
 
+    // 更新顯示
     playerIds.forEach(pid => {
-        const rate = ((wins[pid] / iterations) * 100).toFixed(1);
         const el = document.getElementById(`win-p${pid}`);
-        el.innerText = rate + '%';
-        el.style.color = parseFloat(rate) > (100 / playerIds.length + 10) ? '#4ade80' : '#ffb703';
+        if (el) {
+            // 如果玩家 Fold 了，顯示 "Fold" 且無勝率
+            if (gameState.foldedPlayers[pid]) {
+                el.innerText = 'Fold';
+                el.style.color = '#999';
+            } else {
+                const rate = ((wins[pid] / iterations) * 100).toFixed(1);
+                el.innerText = rate + '%';
+                el.style.color = parseFloat(rate) > (100 / activeContestants.length + 10) ? '#4ade80' : '#ffb703';
+            }
+        }
     });
 
     document.getElementById('status-text').innerText = "計算完成";
 }
 
 /* =========================================
-   4. 牌力計算引擎 (維持不變)
+   4. 牌力計算引擎 (修正版 - 包含踢腳判定)
    ========================================= */
 function parseCard(cardStr) {
     if (!cardStr) return { value: 0, suit: '' };
@@ -470,6 +619,8 @@ function parseCard(cardStr) {
 
 function getHandScore(cards) {
     if (cards.length < 5) return 0;
+
+    // 由大到小排序
     const sorted = cards.map(parseCard).sort((a, b) => b.value - a.value);
 
     const suitCounts = {};
@@ -479,35 +630,101 @@ function getHandScore(cards) {
         valCounts[c.value] = (valCounts[c.value] || 0) + 1;
     });
 
+    // 檢查同花
     let flushSuit = Object.keys(suitCounts).find(s => suitCounts[s] >= 5);
+    let flushCards = [];
+    if (flushSuit) {
+        // 修正：同花必須比 5 張牌的大小，不只是最大的那張
+        flushCards = sorted.filter(c => c.suit === flushSuit).slice(0, 5);
+    }
 
+    // 檢查順子
     const uniqueVals = [...new Set(sorted.map(c => c.value))];
-    if (uniqueVals.includes(14)) uniqueVals.push(1);
+    if (uniqueVals.includes(14)) uniqueVals.push(1); // 處理 A 2 3 4 5
+
     let straightHigh = 0;
     let seq = 0;
     for (let i = 0; i < uniqueVals.length - 1; i++) {
         if (uniqueVals[i] - uniqueVals[i + 1] == 1) seq++;
         else seq = 0;
-        if (seq >= 4) straightHigh = uniqueVals[i - 3];
+        if (seq >= 4) straightHigh = uniqueVals[i - 3]; // 找到順子最大值
     }
 
-    if (flushSuit && straightHigh) return 9000000 + straightHigh;
+    // --- 輔助函式：計算踢腳牌分數 (將牌值轉為小數，如 A,K,J => 0.141311) ---
+    const getKickerScore = (cardsToSum) => {
+        let score = 0;
+        let divider = 100;
+        cardsToSum.forEach(c => {
+            score += c.value / divider;
+            divider *= 100;
+        });
+        return score;
+    };
 
+    // 1. 同花順 (Straight Flush) -> 900 萬分
+    if (flushSuit && straightHigh) {
+        // 這裡需要嚴格檢查同花順，簡化版可能會有誤差，但機率極低
+        // 若要嚴謹，需檢查 flushCards 裡是否有順子，這邊暫沿用舊邏輯修正
+        // 正確做法是只看同花牌有沒有順
+        const fCards = sorted.filter(c => c.suit === flushSuit);
+        const fVals = [...new Set(fCards.map(c => c.value))];
+        if (fVals.includes(14)) fVals.push(1);
+        let fSeq = 0;
+        let fStraightHigh = 0;
+        for (let i = 0; i < fVals.length - 1; i++) {
+            if (fVals[i] - fVals[i + 1] == 1) fSeq++;
+            else fSeq = 0;
+            if (fSeq >= 4) fStraightHigh = fVals[i - 3];
+        }
+        if (fStraightHigh) return 9000000 + fStraightHigh;
+    }
+
+    // 2. 四條 (Quads) -> 800 萬分
     const quads = Object.keys(valCounts).find(v => valCounts[v] === 4);
-    if (quads) return 8000000 + parseInt(quads) * 100;
+    if (quads) {
+        const kicker = sorted.find(c => c.value != quads);
+        return 8000000 + parseInt(quads) * 100 + kicker.value * 0.01;
+    }
 
+    // 3. 葫蘆 (Full House) -> 700 萬分
     const trips = Object.keys(valCounts).filter(v => valCounts[v] === 3).map(Number).sort((a, b) => b - a);
     const pairs = Object.keys(valCounts).filter(v => valCounts[v] === 2).map(Number).sort((a, b) => b - a);
 
     if (trips.length > 0 && (trips.length >= 2 || pairs.length > 0)) {
-        return 7000000 + trips[0] * 100 + (trips[1] || pairs[0]);
+        const tVal = trips[0];
+        const pVal = (trips.length >= 2) ? trips[1] : pairs[0];
+        return 7000000 + tVal * 100 + pVal;
     }
 
-    if (flushSuit) return 6000000 + sorted.find(c => c.suit === flushSuit).value;
-    if (straightHigh) return 5000000 + straightHigh;
-    if (trips.length > 0) return 4000000 + trips[0] * 100;
-    if (pairs.length >= 2) return 3000000 + pairs[0] * 100 + pairs[1];
-    if (pairs.length === 1) return 2000000 + pairs[0] * 100;
+    // 4. 同花 (Flush) -> 600 萬分 (修正：比所有5張牌)
+    if (flushSuit) {
+        return 6000000 + getKickerScore(flushCards) * 10000; // 乘大一點避免被小數吃掉
+    }
 
-    return 1000000 + sorted[0].value;
+    // 5. 順子 (Straight) -> 500 萬分
+    if (straightHigh) return 5000000 + straightHigh;
+
+    // 6. 三條 (Trips) -> 400 萬分 + 兩個踢腳
+    if (trips.length > 0) {
+        const kickers = sorted.filter(c => c.value !== trips[0]).slice(0, 2);
+        return 4000000 + trips[0] * 100 + getKickerScore(kickers);
+    }
+
+    // 7. 兩對 (Two Pair) -> 300 萬分 + 一個踢腳
+    if (pairs.length >= 2) {
+        const p1 = pairs[0];
+        const p2 = pairs[1];
+        const kicker = sorted.find(c => c.value !== p1 && c.value !== p2);
+        return 3000000 + p1 * 100 + p2 + (kicker ? kicker.value * 0.01 : 0);
+    }
+
+    // 8. 一對 (One Pair) -> 200 萬分 + 三個踢腳 (修正最重要的地方)
+    if (pairs.length === 1) {
+        const p1 = pairs[0];
+        const kickers = sorted.filter(c => c.value !== p1).slice(0, 3);
+        return 2000000 + p1 * 100 + getKickerScore(kickers);
+    }
+
+    // 9. 高牌 (High Card) -> 100 萬分 + 五個踢腳
+    return 1000000 + getKickerScore(sorted.slice(0, 5)) * 10000;
 }

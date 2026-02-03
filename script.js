@@ -86,10 +86,9 @@ function initTable() {
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
 
-        // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
 
-        // --- 6. 更新卡片視覺 (確保選過的牌能顯示出來) ---
+        // --- 5. 更新卡片視覺 (確保選過的牌能顯示出來) ---
         if (typeof updateCardVisuals === 'function') {
             updateCardVisuals(i);
         }
