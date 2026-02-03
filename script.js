@@ -13,7 +13,8 @@ let gameState = {
     activeGroup: null,
     currentPickingTarget: null,
     activePlayers: { 1: true }, // 預設只有 P1
-    dealerPos: 1                // 預設莊家在 P1
+    dealerPos: 1,                // 預設莊家在 P1
+    foldedPlayers: {} // 新增：紀錄哪些座位已棄牌 { 1: true, 3: true... }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,31 +29,69 @@ function initTable() {
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
         const isActive = gameState.activePlayers[i];
+        const isFolded = gameState.foldedPlayers[i]; // 檢查是否棄牌
 
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
 
         let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
-        const statusText = isActive ? "(參加)" : "(休息)";
+
+        // 狀態文字顯示
+        let statusText = "(休息)";
+        if (isActive) {
+            statusText = isFolded ? "(Fold)" : "(參加)";
+        }
 
         seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
+        // 卡片是否要加 .folded class
+        const foldClass = (isActive && isFolded) ? 'folded' : '';
+
+        // 按鈕文字
+        const foldBtnText = isFolded ? "復原" : "Fold";
+        const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
+
         seat.innerHTML = `
-            <div class="seat-label" onclick="event.stopPropagation(); togglePlayer(${i})">
-                ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
+            <div class="seat-label" onclick="event.stopPropagation();">
+                <span onclick="togglePlayer(${i})">${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span></span>
+                
+                <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
+                        style="${foldBtnStyle}"
+                        onclick="event.stopPropagation(); toggleFold(${i})">
+                    ${foldBtnText}
+                </button>
             </div>
             
             <div id="badge-p${i}" class="badge-container" style="min-height:20px; margin-bottom:4px;"></div>
             
             <div style="display:flex; gap:4px; justify-content:center; pointer-events:none;">
-                <div class="card empty" id="p${i}c1">?</div>
-                <div class="card empty" id="p${i}c2">?</div>
+                <div class="card empty ${foldClass}" id="p${i}c1">?</div>
+                <div class="card empty ${foldClass}" id="p${i}c2">?</div>
             </div>
             
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
         placeholder.appendChild(seat);
+
+        // 恢復卡片內容 (如果有選過牌)
+        updateCardVisuals(i);
     }
+    updatePositions();
+}
+
+// 新增一個輔助函式來恢復卡片顯示 (不然 initTable 會把牌變回 ?)
+function updateCardVisuals(playerId) {
+    ['c1', 'c2'].forEach(suffix => {
+        const key = `p${playerId}${suffix}`;
+        const cardVal = gameState.selectedCards[key];
+        const el = document.getElementById(key);
+        if (cardVal && el) {
+            el.className = `card ${gameState.foldedPlayers[playerId] ? 'folded' : ''}`;
+            const suit = cardVal.slice(-1);
+            el.classList.add(suitColors[suit]);
+            el.innerText = cardVal;
+        }
+    });
 }
 
 /* =========================================
@@ -370,6 +409,27 @@ function closeSelector() {
 }
 
 /**
+ * [功能] 切換玩家棄牌狀態
+ */
+function toggleFold(playerId) {
+    // 只有在玩家「參加」時才能 Fold
+    if (!gameState.activePlayers[playerId]) return;
+
+    // 切換狀態
+    if (gameState.foldedPlayers[playerId]) {
+        delete gameState.foldedPlayers[playerId]; // 恢復
+    } else {
+        gameState.foldedPlayers[playerId] = true; // 棄牌
+    }
+
+    // 重新渲染介面 (更新按鈕文字、卡片樣式)
+    initTable();
+
+    // 如果想要直接重新計算勝率，可以把下面這行註解打開
+    calculateOdds();
+}
+
+/**
  * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
  */
 function resetTable() {
@@ -378,6 +438,7 @@ function resetTable() {
 
     // 1. 清空記憶體中的選牌資料
     gameState.selectedCards = {};
+    gameState.foldedPlayers = {}; // 新增：重置所有棄牌狀態
 
     // 2. 重置公牌區域 (b0 - b4)
     for (let i = 0; i < 5; i++) {
@@ -412,6 +473,8 @@ function resetTable() {
     if (statusText) {
         statusText.innerText = "桌面已清空，請開始新的一局";
     }
+    // 建議在 resetTable 最後加這一行來刷新 UI
+    initTable();
 }
 
 
@@ -435,21 +498,34 @@ function calculateOdds() {
 }
 
 function runSimulation(playerIds) {
-    // 修改：將次數從 3000 提高到 50000，讓數字更穩定接近電視轉播
     const iterations = 50000;
     const wins = {};
-    playerIds.forEach(id => wins[id] = 0);
+
+    // 1. 過濾出「真正參與比牌」的玩家 (排除 Fold 的人)
+    // 雖然 playerIds 傳進來的是所有 Active 的人，但我們要扣掉 Fold 的
+    const activeContestants = playerIds.filter(id => !gameState.foldedPlayers[id]);
+
+    // 初始化計分板
+    activeContestants.forEach(id => wins[id] = 0);
+
+    // 如果沒人玩或只剩 0 人，直接結束
+    if (activeContestants.length === 0) {
+        document.getElementById('status-text').innerText = "沒有活躍玩家可計算";
+        return;
+    }
 
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
 
+    // 2. 關鍵：knownCards 包含「所有」桌上的牌 (包含已 Fold 玩家的牌)
+    // 這保證了 Fold 掉的牌不會被重新發出來
     const knownCards = Object.values(gameState.selectedCards);
 
     for (let i = 0; i < iterations; i++) {
-        // 簡單優化：複製陣列比 filter 快一點，但這裡維持原邏輯確保正確性
+        // 從牌堆移除已知牌 (包含 Fold 的牌)
         let deck = fullDeck.filter(c => !knownCards.includes(c));
 
-        // 洗牌 (Fisher-Yates)
+        // 洗牌
         for (let j = deck.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
             [deck[j], deck[k]] = [deck[k], deck[j]];
@@ -466,10 +542,12 @@ function runSimulation(playerIds) {
         let bestScore = -1;
         let winners = [];
 
-        playerIds.forEach(pid => {
+        // 3. 只計算「沒 Fold」的玩家的分數
+        activeContestants.forEach(pid => {
             let c1 = gameState.selectedCards[`p${pid}c1`];
             let c2 = gameState.selectedCards[`p${pid}c2`];
 
+            // 補牌
             if (!c1) c1 = deck.pop();
             if (!c2) c2 = deck.pop();
 
@@ -482,17 +560,22 @@ function runSimulation(playerIds) {
             }
         });
 
-        // 處理平手 (Split Pot)
         winners.forEach(pid => wins[pid] += 1 / winners.length);
     }
 
+    // 更新顯示
     playerIds.forEach(pid => {
-        const rate = ((wins[pid] / iterations) * 100).toFixed(1);
         const el = document.getElementById(`win-p${pid}`);
         if (el) {
-            el.innerText = rate + '%';
-            // 勝率高的顯示綠色，低顯示黃色
-            el.style.color = parseFloat(rate) > (100 / playerIds.length + 10) ? '#4ade80' : '#ffb703';
+            // 如果玩家 Fold 了，顯示 "Fold" 且無勝率
+            if (gameState.foldedPlayers[pid]) {
+                el.innerText = 'Fold';
+                el.style.color = '#999';
+            } else {
+                const rate = ((wins[pid] / iterations) * 100).toFixed(1);
+                el.innerText = rate + '%';
+                el.style.color = parseFloat(rate) > (100 / activeContestants.length + 10) ? '#4ade80' : '#ffb703';
+            }
         }
     });
 

@@ -516,3 +516,50 @@ body {
     font-weight: bold;
     display: inline-block;
 }
+
+/* --- 新增樣式 --- */
+
+/* 棄牌狀態的卡片：半透明且黑白化 */
+.card.folded {
+    opacity: 0.6;
+    filter: grayscale(100%);
+    position: relative;
+}
+
+/* 在棄牌上打一個紅色的 X 或文字 (選用) */
+.card.folded::after {
+    content: 'FOLD';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 14px;
+    color: red;
+    font-weight: bold;
+    border: 2px solid red;
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+/* Fold 按鈕樣式 */
+.btn-fold {
+    background: #e63946;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+.btn-fold:hover {
+    background: #d62828;
+}
+
+/* 如果已經 Fold 了，按鈕改顏色提示可以恢復 */
+.btn-fold.is-folded {
+    background: #666;
+    content: 'Undo';
+}
