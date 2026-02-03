@@ -42,7 +42,11 @@ function initTable() {
 
         // --- 2. 核心修正：定義顯示邏輯 ---
         // 只要是參加者 (isActive)，就顯示按鈕，不論有無選牌
-        const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
+        // 判斷桌面上是否已經有任何牌被選了 (代表遊戲進行中)
+        const isGameStarted = Object.keys(gameState.selectedCards).length > 0;
+
+        // 只要是參加者 (isActive) 且遊戲已開始，就顯示按鈕
+        const foldBtnStyle = (isActive && isGameStarted) ? "display:inline-block;" : "display:none;";
         const foldBtnText = isFolded ? "復原" : "Fold";
 
         // 標籤文字
@@ -394,6 +398,7 @@ function handleCardClick(cardStr, isUsed, usedById, isOwnedByMe) {
         autoSetTargetToFirstEmpty();
 
         renderSelector();
+        initTable();
     } else {
         // 如果目前沒有目標 (例如 5 張已滿)，但使用者點擊了一張沒被選過的牌
         // 這裡可以選擇不動作，或者提示使用者先刪除一張
