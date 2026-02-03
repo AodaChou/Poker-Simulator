@@ -1,0 +1,518 @@
+:root {
+    --poker-green: #1a4731;
+    --felt: #245e43;
+    --gold: #ffb703;
+    --dark-bg: #0f2027;
+}
+
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: var(--dark-bg);
+    color: white;
+    text-align: center;
+    overflow-x: hidden;
+    /* 防止捲軸 */
+}
+
+/* 桌面容器：橢圓形 */
+.table-container {
+    position: relative;
+    width: 800px;
+    /* 桌面寬度 */
+    height: 480px;
+    /* 桌面高度 */
+    background: var(--felt);
+    border: 15px solid #3d2b1f;
+    border-radius: 240px;
+    margin: 100px auto;
+    /* 確保上下左右有足夠空間顯示座位 */
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+/* 公牌區域：絕對置中 */
+.board-area {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+}
+
+/* 座位預設樣式：增加透明度過渡效果 */
+.seat {
+    position: absolute;
+    width: 110px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 10;
+    /* 核心修改：預設為未參加狀態 (半透明) */
+    opacity: 0.4;
+    border: 1px solid #444;
+    transform: scale(0.9);
+}
+
+/* 活躍狀態：完全不透明，且邊框發光 */
+/* 參加狀態 (Active) */
+.seat.active {
+    opacity: 1;
+    transform: scale(1);
+    border: 1px solid var(--gold);
+    box-shadow: 0 0 15px rgba(255, 183, 3, 0.3);
+}
+
+/* P1 特別樣式 */
+.seat.active.s1 {
+    border: 2px solid #4ade80;
+    /* 綠色框代表自己 */
+}
+
+/* --- 9人桌 3-2-3-1 精確對稱佈局 --- */
+/* --- 9人桌 全對稱幾何中點佈局 --- */
+/* 底部：你 (Hero / P1) - 基準點 1 */
+/* P1 (Hero) 永遠保持活躍，給個特殊色 */
+
+.s1 {
+    bottom: -60px;
+    left: 50%;
+    margin-left: -58px;
+}
+
+/* --- 左側佈局 --- */
+/* P2: 位於 P3 與 P1 的中點 (下轉角) */
+.s2 {
+    bottom: -2%;
+    left: 12%;
+}
+
+/* P3: 正左 - 基準點 2 (高度 50%) */
+/*.s3 { top: 50%; left: -140px; transform: translateY(-50%); }*/
+.s3 {
+    top: 35%;
+    left: -10%;
+}
+
+/* P4: 位於 P3 與 P5 的中點 (上轉角) */
+.s4 {
+    top: 2%;
+    left: 3%;
+}
+
+/* P5: 對面左 - 基準點 3 (頂部水平) */
+.s5 {
+    top: -100px;
+    left: 25%;
+}
+
+/* --- 右側佈局 --- */
+/* P6: 對面右 - 基準點 5 (頂部水平) */
+.s6 {
+    top: -100px;
+    left: 58%;
+}
+
+/* P7: 位於 P6 與 P8 的中點 (上轉角) */
+.s7 {
+    top: 2%;
+    right: 3%;
+}
+
+/* P8: 正右 - 基準點 4 (高度 50%) */
+.s8 {
+    top: 35%;
+    right: -10%;
+}
+
+/* P9: 位於 P8 與 P1 的中點 (下轉角) */
+.s9 {
+    bottom: -2%;
+    right: 12%;
+}
+
+/* 標籤按鈕樣式 */
+
+.seat-label {
+    font-size: 12px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    user-select: none;
+}
+
+.seat-label:hover {
+    background: var(--gold);
+    color: black;
+}
+
+.seat:hover {
+    transform: scale(1.01);
+    /* 增加一點互動感 */
+}
+
+/* 勝率文字 */
+.win-rate {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--gold);
+    margin-top: 5px;
+}
+
+/* 卡片樣式 */
+.card {
+    width: 45px;
+    height: 65px;
+    background: #ffffff;
+    /* 確保背景是白的 */
+    color: #000000;
+    /* 預設文字黑色 */
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    border: 1px solid #999;
+}
+
+.card.empty {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border: 2px dashed #666;
+}
+
+#selector-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    /* 稍微加深背景 */
+    z-index: 999;
+    justify-content: center;
+    align-items: center;
+    /* 讓內容垂直水平居中 */
+}
+
+/* 新增：文字與面板的共同容器 */
+.selector-container {
+    display: flex;
+    flex-direction: column;
+    /* 讓子元素垂直堆疊 */
+    align-items: center;
+    /* 水平居中 */
+    gap: 15px;
+    /* 文字與面板之間的間距 */
+}
+
+.selector-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 6px;
+    padding: 20px;
+    background: #222;
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+}
+
+/* 選牌視窗的卡片 */
+.selector-card {
+    width: 45px;
+    height: 60px;
+    background: white;
+    color: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    transition: transform 0.1s;
+    font-weight: bold;
+    position: relative;
+}
+
+/* 已被選取的卡片樣式 (視覺變暗，但仍可點擊以取消) */
+.selector-card.selected {
+    background: #444;
+    color: #888;
+}
+
+.selector-card.selected::after {
+    content: '✓';
+    color: var(--gold);
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 10px;
+}
+
+.selector-card:hover {
+    transform: scale(1.1);
+    z-index: 10;
+}
+
+.selector-card.used {
+    opacity: 0.2;
+    cursor: not-allowed;
+}
+
+/* 2. "我這個群組" 選的卡片 -> 綠色邊框，表示可點擊取消 */
+.selector-card.owned-by-me {
+    border: 2px solid #4ade80;
+    background: #2a2a2a;
+    color: #fff;
+    /* 保持亮色，方便辨識 */
+    cursor: pointer;
+}
+
+.selector-card.owned-by-me:hover {
+    background: #c0392b;
+    /* 滑鼠懸停時變紅，暗示刪除 */
+    border-color: #e74c3c;
+}
+
+.selector-card.owned-by-me:hover::after {
+    content: '✕';
+    /* 顯示叉叉 */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    color: white;
+}
+
+
+.selector-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    /* 文字與網格的間距 */
+}
+
+#floating-tip {
+    position: static;
+    /* 移除絕對定位 */
+    transform: none;
+    /* 移除位移 */
+    color: var(--gold);
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--gold);
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+/* 桌面目標高亮動畫 */
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 5px var(--gold);
+    }
+
+    50% {
+        box-shadow: 0 0 20px var(--gold);
+    }
+
+    100% {
+        box-shadow: 0 0 5px var(--gold);
+    }
+}
+
+.highlight-active {
+    animation: glow 1.5s infinite;
+    border: 2px solid var(--gold) !important;
+    z-index: 100;
+}
+
+/* 當前正在編輯的目標格，使用綠色呼吸燈感 */
+.card.editing {
+    box-shadow: 0 0 15px #4ade80, 0 0 10px #4ade80 inset;
+    border: 2px solid #4ade80 !important;
+    transform: scale(1.1);
+    z-index: 100;
+    /*transition: all 0.2s ease;*/
+}
+
+/* 3. "別人" 選的卡片 -> 鎖定 */
+.selector-card.locked {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: #000;
+    border: 1px dashed #555;
+    pointer-events: none;
+    /* 禁止點擊 */
+}
+
+.selector-card.locked::after {
+    content: '🔒';
+    font-size: 14px;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+}
+
+/* 莊家按鈕 D-Button */
+.dealer-button {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    background: white;
+    color: black;
+    border-radius: 50%;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    z-index: 20;
+    transition: all 0.5s ease;
+    /* 移動時有滑順動畫 */
+    border: 2px solid #ccc;
+}
+
+/* 位置標籤 (SB, BB, UTG) */
+.pos-badge {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 5px;
+    display: inline-block;
+}
+
+.pos-sb {
+    background: #3498db;
+    color: white;
+}
+
+/* 藍色 */
+.pos-bb {
+    background: #e74c3c;
+    color: white;
+}
+
+/* 紅色 */
+.pos-utg {
+    background: #f1c40f;
+    color: black;
+}
+
+/* 黃色 */
+
+/* 控制按鈕樣式 */
+/* .controls-area {
+    margin: 20px auto;
+} */
+
+/* 右下角控制箱容器 */
+.control-box {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(15, 32, 39, 0.9);
+    /* 深色背景配合整體風格 */
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--gold);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+/* 狀態文字樣式 */
+.status-panel {
+    text-align: right;
+    margin-bottom: 5px;
+}
+
+#status-text {
+    margin: 0;
+    color: var(--gold);
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#pos-info {
+    color: #aaa;
+    font-size: 12px;
+}
+
+/* 按鈕群組佈局 */
+.button-group {
+    display: flex;
+    flex-direction: column;
+    /* 垂直排列 */
+    gap: 8px;
+}
+
+/* 通用按鈕樣式 */
+.action-btn {
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    width: 160px;
+    /* 固定寬度更整齊 */
+}
+
+/* 各別按鈕顏色自定義 */
+/* .dealer-btn {
+    background: #3498db;
+    color: white;
+} */
+
+/* 藍色 */
+.calc-btn {
+    background: var(--gold);
+    color: #000;
+}
+
+/* 金色 */
+.reset-btn {
+    background: #666;
+    color: white;
+}
+
+/* 灰色 */
+
+.action-btn:hover {
+    transform: translateX(-3px);
+    /* 懸停時向左微動 */
+    filter: brightness(1.2);
+}
+
+/* 莊家位置標籤樣式 */
+.pos-d {
+    background: #000000;
+    color: #ffffff;
+    border: 1px solid #ffb703;
+    /* 給莊家一個金邊 */
+}
+
+/* 確保標籤容器內部的標籤有間距 */
+.pos-badge {
+    margin-right: 3px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    display: inline-block;
+}
