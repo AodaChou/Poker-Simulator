@@ -67,25 +67,16 @@ function initTable() {
         seat.innerHTML = `
             <div class="seat-label" onclick="event.stopPropagation();">
                 <span onclick="togglePlayer(${i})">
-                    ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
+                    ${(i === 1) ? "你 (Hero)" : `P${i}`} 
+                    <span id="status-p${i}" style="font-size:10px">${isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)"}</span>
                 </span>
-                
                 <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
-                        style="${foldBtnStyle} margin-left:8px; vertical-align:middle;"
+                        style="${foldBtnStyle} margin-left:5px;"
                         onclick="event.stopPropagation(); toggleFold(${i})">
                     ${foldBtnText}
                 </button>
             </div>
-            
-            <div id="badge-p${i}" class="badge-container" style="min-height:20px; margin-bottom:4px;"></div>
-            
-            <div style="display:flex; gap:4px; justify-content:center; pointer-events:none;">
-                <div class="card empty ${foldClass}" id="p${i}c1">?</div>
-                <div class="card empty ${foldClass}" id="p${i}c2">?</div>
-            </div>
-            
-            <div class="win-rate" id="win-p${i}">--%</div>
-        `;
+            `;
 
         // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
@@ -430,6 +421,42 @@ function closeSelector() {
     gameState.currentPickingTarget = null;
     gameState.activeGroup = null;
     document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
+}
+
+/**
+ * [功能] 一鍵隨機發出剩餘的公牌 (b0 ~ b4)
+ */
+function dealRandomCommunityCards() {
+    // 1. 建立完整 52 張牌堆
+    const fullDeck = [];
+    suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
+
+    // 2. 過濾掉已經被選走的牌 (手牌 + 已存在的公牌)
+    const usedCards = Object.values(gameState.selectedCards);
+    let remainingDeck = fullDeck.filter(card => !usedCards.includes(card));
+
+    // 3. 洗牌
+    for (let i = remainingDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
+    }
+
+    let changed = false;
+    // 4. 補滿 b0 ~ b4
+    for (let i = 0; i < 5; i++) {
+        const targetId = `b${i}`;
+        if (!gameState.selectedCards[targetId]) {
+            if (remainingDeck.length > 0) {
+                gameState.selectedCards[targetId] = remainingDeck.pop();
+                changed = true;
+            }
+        }
+    }
+
+    if (changed) {
+        initTable(); // 重新渲染桌面，這會觸發 Fold 按鈕顯示
+        document.getElementById('status-text').innerText = "已補齊公牌，可以進行計算";
+    }
 }
 
 /**
