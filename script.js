@@ -423,6 +423,57 @@ function closeSelector() {
     document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
 }
 
+
+/**
+ * [功能] 一鍵隨機發出剩餘的公牌 (b0 ~ b4)
+ */
+function dealRandomCommunityCards() {
+    // 1. 建立完整 52 張牌堆
+    const fullDeck = [];
+    suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
+
+    // 2. 獲取目前桌面上已經被選走的牌 (包含手牌與公牌)
+    const usedCards = Object.values(gameState.selectedCards);
+    // 3. 過濾掉已使用的牌
+    let remainingDeck = fullDeck.filter(card => !usedCards.includes(card));
+
+    // 4. 洗牌
+    for (let i = remainingDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
+    }
+
+    let changed = false;
+    // 5. 檢查 b0 到 b4 這五個位置，如果是空的就從牌堆抽一張
+    for (let i = 0; i < 5; i++) {
+        const targetId = `b${i}`;
+        if (!gameState.selectedCards[targetId]) {
+            if (remainingDeck.length > 0) {
+                const newCard = remainingDeck.pop();
+                gameState.selectedCards[targetId] = newCard;
+
+                // 更新畫面上公牌的 DOM
+                const cardEl = document.getElementById(targetId);
+                if (cardEl) {
+                    const suit = newCard.slice(-1);
+                    cardEl.className = `card ${suitColors[suit]}`;
+                    cardEl.innerText = newCard;
+                }
+                changed = true;
+            }
+        }
+    }
+
+    if (changed) {
+        // 更新狀態列並重新初始化桌面以同步 Fold 按鈕狀態
+        initTable();
+        document.getElementById('status-text').innerText = "已隨機補齊公牌";
+    } else {
+        alert("公牌已滿，無需發牌");
+    }
+}
+
+
 /**
  * [功能] 切換玩家棄牌狀態
  */
@@ -719,53 +770,4 @@ function getHandScore(cards) {
 
     // 9. 高牌 (High Card) -> 100 萬分 + 五個踢腳
     return 1000000 + getKickerScore(sorted.slice(0, 5)) * 10000;
-}
-
-/**
- * [功能] 一鍵隨機發出剩餘的公牌 (b0 ~ b4)
- */
-function dealRandomCommunityCards() {
-    // 1. 建立完整 52 張牌堆
-    const fullDeck = [];
-    suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
-
-    // 2. 獲取目前桌面上已經被選走的牌 (包含手牌與公牌)
-    const usedCards = Object.values(gameState.selectedCards);
-    // 3. 過濾掉已使用的牌
-    let remainingDeck = fullDeck.filter(card => !usedCards.includes(card));
-
-    // 4. 洗牌
-    for (let i = remainingDeck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
-    }
-
-    let changed = false;
-    // 5. 檢查 b0 到 b4 這五個位置，如果是空的就從牌堆抽一張
-    for (let i = 0; i < 5; i++) {
-        const targetId = `b${i}`;
-        if (!gameState.selectedCards[targetId]) {
-            if (remainingDeck.length > 0) {
-                const newCard = remainingDeck.pop();
-                gameState.selectedCards[targetId] = newCard;
-
-                // 更新畫面上公牌的 DOM
-                const cardEl = document.getElementById(targetId);
-                if (cardEl) {
-                    const suit = newCard.slice(-1);
-                    cardEl.className = `card ${suitColors[suit]}`;
-                    cardEl.innerText = newCard;
-                }
-                changed = true;
-            }
-        }
-    }
-
-    if (changed) {
-        // 更新狀態列並重新初始化桌面以同步 Fold 按鈕狀態
-        initTable();
-        document.getElementById('status-text').innerText = "已隨機補齊公牌";
-    } else {
-        alert("公牌已滿，無需發牌");
-    }
 }
