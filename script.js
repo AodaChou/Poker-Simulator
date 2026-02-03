@@ -23,38 +23,39 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * [功能] 初始化桌面座位與玩家狀態
- * 確保所有變數在 innerHTML 之前定義，並正確閉合迴圈
+ * [功能] 初始化桌面座位、按鈕與玩家狀態
+ * 確保只要玩家是「參加」狀態，無論何時都顯示 Fold 按鈕
  */
 function initTable() {
     const placeholder = document.getElementById('seats-placeholder');
     if (!placeholder) return;
-
-    placeholder.innerHTML = '';
+    
+    placeholder.innerHTML = ''; 
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
-
-        // --- 1. 取得狀態資料 ---
+        
+        // --- 1. 取得最新狀態 ---
         const isActive = gameState.activePlayers[i];
-        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i]; // 確保 foldedPlayers 存在
-
-        // --- 2. 定義顯示用的變數 (必須在 innerHTML 之前) ---
-        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
-        let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
-
-        // 棄牌按鈕的樣式與文字
+        // 確保 foldedPlayers 物件存在，避免讀取錯誤
+        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i]; 
+        
+        // --- 2. 核心修正：定義顯示邏輯 ---
+        // 只要是參加者 (isActive)，就顯示按鈕，不論有無選牌
         const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
         const foldBtnText = isFolded ? "復原" : "Fold";
-
-        // 卡片的 CSS class (若棄牌則變暗)
+        
+        // 標籤文字
+        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
+        let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
+        
+        // 卡片視覺效果
         const foldClass = (isActive && isFolded) ? 'folded' : '';
 
-        // --- 3. 設定座位屬性 ---
+        // --- 3. 設定座位基本屬性 ---
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
-
-        // 點擊座位開啟選牌器
+        // 點擊座位整體仍可開啟選牌器
         seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
         // --- 4. 產生 HTML 結構 ---
@@ -65,7 +66,7 @@ function initTable() {
                 </span>
                 
                 <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
-                        style="${foldBtnStyle} margin-left:5px; vertical-align:middle;"
+                        style="${foldBtnStyle} margin-left:8px; vertical-align:middle;"
                         onclick="event.stopPropagation(); toggleFold(${i})">
                     ${foldBtnText}
                 </button>
@@ -81,15 +82,16 @@ function initTable() {
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
 
+        // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
-
-        // 呼叫輔助函式更新卡片花色與點數
+        
+        // --- 6. 更新卡片視覺 (確保選過的牌能顯示出來) ---
         if (typeof updateCardVisuals === 'function') {
             updateCardVisuals(i);
         }
     }
-
-    // 更新莊家按鈕位置
+    
+    // 初始化莊家/SB/BB位置
     if (typeof updatePositions === 'function') {
         updatePositions();
     }
