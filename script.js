@@ -29,26 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
 function initTable() {
     const placeholder = document.getElementById('seats-placeholder');
     if (!placeholder) return;
-    
-    placeholder.innerHTML = ''; 
+
+    placeholder.innerHTML = '';
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
-        
+
         // --- 1. 取得最新狀態 ---
         const isActive = gameState.activePlayers[i];
         // 確保 foldedPlayers 物件存在，避免讀取錯誤
-        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i]; 
-        
+        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i];
+
         // --- 2. 核心修正：定義顯示邏輯 ---
         // 只要是參加者 (isActive)，就顯示按鈕，不論有無選牌
         const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
         const foldBtnText = isFolded ? "復原" : "Fold";
-        
+
         // 標籤文字
         let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
         let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
-        
+
         // 卡片視覺效果
         const foldClass = (isActive && isFolded) ? 'folded' : '';
 
@@ -84,13 +84,13 @@ function initTable() {
 
         // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
-        
+
         // --- 6. 更新卡片視覺 (確保選過的牌能顯示出來) ---
         if (typeof updateCardVisuals === 'function') {
             updateCardVisuals(i);
         }
     }
-    
+
     // 初始化莊家/SB/BB位置
     if (typeof updatePositions === 'function') {
         updatePositions();
