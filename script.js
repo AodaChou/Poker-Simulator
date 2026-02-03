@@ -370,12 +370,47 @@ function closeSelector() {
 }
 
 /**
- * [功能] 清空目前桌面所有設定
- * [原理] 重新載入頁面以達到完全初始化
+ * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
  */
 function resetTable() {
-    if (confirm("確定要清空桌面所有卡片與設定嗎？")) {
-        location.reload();
+    // 增加確認對話框，避免誤觸
+    if (!confirm("確定要清空桌面上的牌嗎？(玩家設定將保留)")) return;
+
+    // 1. 清空記憶體中的選牌資料
+    gameState.selectedCards = {};
+
+    // 2. 重置公牌區域 (b0 - b4)
+    for (let i = 0; i < 5; i++) {
+        const el = document.getElementById(`b${i}`);
+        if (el) {
+            el.className = 'card empty'; // 移除花色樣式，變回虛線框
+            el.innerText = '?';          // 文字變回問號
+        }
+    }
+
+    // 3. 重置所有玩家的手牌與勝率 (p1 - p9)
+    for (let i = 1; i <= 9; i++) {
+        // 重置兩張手牌
+        ['c1', 'c2'].forEach(suffix => {
+            const el = document.getElementById(`p${i}${suffix}`);
+            if (el) {
+                el.className = 'card empty';
+                el.innerText = '?';
+            }
+        });
+
+        // 重置勝率顯示
+        const winEl = document.getElementById(`win-p${i}`);
+        if (winEl) {
+            winEl.innerText = '--%';
+            winEl.style.color = ''; // 移除顏色設定
+        }
+    }
+
+    // 4. 更新狀態列提示
+    const statusText = document.getElementById('status-text');
+    if (statusText) {
+        statusText.innerText = "桌面已清空，請開始新的一局";
     }
 }
 
