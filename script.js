@@ -379,8 +379,9 @@ function resetTable() {
     }
 }
 
+
 /* =========================================
-   3. 核心運算 (維持不變)
+   3. 核心運算 (提高次數)
    ========================================= */
 /**
  * [功能] 計算所有活躍玩家的勝率
@@ -399,7 +400,8 @@ function calculateOdds() {
 }
 
 function runSimulation(playerIds) {
-    const iterations = 5000; // 模擬次數
+    // 修改：將次數從 3000 提高到 50000，讓數字更穩定接近電視轉播
+    const iterations = 50000;
     const wins = {};
     playerIds.forEach(id => wins[id] = 0);
 
@@ -409,9 +411,10 @@ function runSimulation(playerIds) {
     const knownCards = Object.values(gameState.selectedCards);
 
     for (let i = 0; i < iterations; i++) {
+        // 簡單優化：複製陣列比 filter 快一點，但這裡維持原邏輯確保正確性
         let deck = fullDeck.filter(c => !knownCards.includes(c));
 
-        // 洗牌
+        // 洗牌 (Fisher-Yates)
         for (let j = deck.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
             [deck[j], deck[k]] = [deck[k], deck[j]];
@@ -444,21 +447,25 @@ function runSimulation(playerIds) {
             }
         });
 
+        // 處理平手 (Split Pot)
         winners.forEach(pid => wins[pid] += 1 / winners.length);
     }
 
     playerIds.forEach(pid => {
         const rate = ((wins[pid] / iterations) * 100).toFixed(1);
         const el = document.getElementById(`win-p${pid}`);
-        el.innerText = rate + '%';
-        el.style.color = parseFloat(rate) > (100 / playerIds.length + 10) ? '#4ade80' : '#ffb703';
+        if (el) {
+            el.innerText = rate + '%';
+            // 勝率高的顯示綠色，低顯示黃色
+            el.style.color = parseFloat(rate) > (100 / playerIds.length + 10) ? '#4ade80' : '#ffb703';
+        }
     });
 
     document.getElementById('status-text').innerText = "計算完成";
 }
 
 /* =========================================
-   4. 牌力計算引擎 (維持不變)
+   4. 牌力計算引擎 (修正版 - 包含踢腳判定)
    ========================================= */
 function parseCard(cardStr) {
     if (!cardStr) return { value: 0, suit: '' };
@@ -469,6 +476,8 @@ function parseCard(cardStr) {
 
 function getHandScore(cards) {
     if (cards.length < 5) return 0;
+
+    // 由大到小排序
     const sorted = cards.map(parseCard).sort((a, b) => b.value - a.value);
 
     const suitCounts = {};
@@ -478,35 +487,101 @@ function getHandScore(cards) {
         valCounts[c.value] = (valCounts[c.value] || 0) + 1;
     });
 
+    // 檢查同花
     let flushSuit = Object.keys(suitCounts).find(s => suitCounts[s] >= 5);
+    let flushCards = [];
+    if (flushSuit) {
+        // 修正：同花必須比 5 張牌的大小，不只是最大的那張
+        flushCards = sorted.filter(c => c.suit === flushSuit).slice(0, 5);
+    }
 
+    // 檢查順子
     const uniqueVals = [...new Set(sorted.map(c => c.value))];
-    if (uniqueVals.includes(14)) uniqueVals.push(1);
+    if (uniqueVals.includes(14)) uniqueVals.push(1); // 處理 A 2 3 4 5
+
     let straightHigh = 0;
     let seq = 0;
     for (let i = 0; i < uniqueVals.length - 1; i++) {
         if (uniqueVals[i] - uniqueVals[i + 1] == 1) seq++;
         else seq = 0;
-        if (seq >= 4) straightHigh = uniqueVals[i - 3];
+        if (seq >= 4) straightHigh = uniqueVals[i - 3]; // 找到順子最大值
     }
 
-    if (flushSuit && straightHigh) return 9000000 + straightHigh;
+    // --- 輔助函式：計算踢腳牌分數 (將牌值轉為小數，如 A,K,J => 0.141311) ---
+    const getKickerScore = (cardsToSum) => {
+        let score = 0;
+        let divider = 100;
+        cardsToSum.forEach(c => {
+            score += c.value / divider;
+            divider *= 100;
+        });
+        return score;
+    };
 
+    // 1. 同花順 (Straight Flush) -> 900 萬分
+    if (flushSuit && straightHigh) {
+        // 這裡需要嚴格檢查同花順，簡化版可能會有誤差，但機率極低
+        // 若要嚴謹，需檢查 flushCards 裡是否有順子，這邊暫沿用舊邏輯修正
+        // 正確做法是只看同花牌有沒有順
+        const fCards = sorted.filter(c => c.suit === flushSuit);
+        const fVals = [...new Set(fCards.map(c => c.value))];
+        if (fVals.includes(14)) fVals.push(1);
+        let fSeq = 0;
+        let fStraightHigh = 0;
+        for (let i = 0; i < fVals.length - 1; i++) {
+            if (fVals[i] - fVals[i + 1] == 1) fSeq++;
+            else fSeq = 0;
+            if (fSeq >= 4) fStraightHigh = fVals[i - 3];
+        }
+        if (fStraightHigh) return 9000000 + fStraightHigh;
+    }
+
+    // 2. 四條 (Quads) -> 800 萬分
     const quads = Object.keys(valCounts).find(v => valCounts[v] === 4);
-    if (quads) return 8000000 + parseInt(quads) * 100;
+    if (quads) {
+        const kicker = sorted.find(c => c.value != quads);
+        return 8000000 + parseInt(quads) * 100 + kicker.value * 0.01;
+    }
 
+    // 3. 葫蘆 (Full House) -> 700 萬分
     const trips = Object.keys(valCounts).filter(v => valCounts[v] === 3).map(Number).sort((a, b) => b - a);
     const pairs = Object.keys(valCounts).filter(v => valCounts[v] === 2).map(Number).sort((a, b) => b - a);
 
     if (trips.length > 0 && (trips.length >= 2 || pairs.length > 0)) {
-        return 7000000 + trips[0] * 100 + (trips[1] || pairs[0]);
+        const tVal = trips[0];
+        const pVal = (trips.length >= 2) ? trips[1] : pairs[0];
+        return 7000000 + tVal * 100 + pVal;
     }
 
-    if (flushSuit) return 6000000 + sorted.find(c => c.suit === flushSuit).value;
-    if (straightHigh) return 5000000 + straightHigh;
-    if (trips.length > 0) return 4000000 + trips[0] * 100;
-    if (pairs.length >= 2) return 3000000 + pairs[0] * 100 + pairs[1];
-    if (pairs.length === 1) return 2000000 + pairs[0] * 100;
+    // 4. 同花 (Flush) -> 600 萬分 (修正：比所有5張牌)
+    if (flushSuit) {
+        return 6000000 + getKickerScore(flushCards) * 10000; // 乘大一點避免被小數吃掉
+    }
 
-    return 1000000 + sorted[0].value;
+    // 5. 順子 (Straight) -> 500 萬分
+    if (straightHigh) return 5000000 + straightHigh;
+
+    // 6. 三條 (Trips) -> 400 萬分 + 兩個踢腳
+    if (trips.length > 0) {
+        const kickers = sorted.filter(c => c.value !== trips[0]).slice(0, 2);
+        return 4000000 + trips[0] * 100 + getKickerScore(kickers);
+    }
+
+    // 7. 兩對 (Two Pair) -> 300 萬分 + 一個踢腳
+    if (pairs.length >= 2) {
+        const p1 = pairs[0];
+        const p2 = pairs[1];
+        const kicker = sorted.find(c => c.value !== p1 && c.value !== p2);
+        return 3000000 + p1 * 100 + p2 + (kicker ? kicker.value * 0.01 : 0);
+    }
+
+    // 8. 一對 (One Pair) -> 200 萬分 + 三個踢腳 (修正最重要的地方)
+    if (pairs.length === 1) {
+        const p1 = pairs[0];
+        const kickers = sorted.filter(c => c.value !== p1).slice(0, 3);
+        return 2000000 + p1 * 100 + getKickerScore(kickers);
+    }
+
+    // 9. 高牌 (High Card) -> 100 萬分 + 五個踢腳
+    return 1000000 + getKickerScore(sorted.slice(0, 5)) * 10000;
 }
