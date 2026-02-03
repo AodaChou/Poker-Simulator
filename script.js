@@ -22,41 +22,50 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePositions(); // 初始化位置
 });
 
+/**
+ * [功能] 初始化桌面座位與玩家狀態
+ * 確保所有變數在 innerHTML 之前定義，並正確閉合迴圈
+ */
 function initTable() {
     const placeholder = document.getElementById('seats-placeholder');
+    if (!placeholder) return;
+
     placeholder.innerHTML = '';
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
-        const isActive = gameState.activePlayers[i];
-        const isFolded = gameState.foldedPlayers[i]; // 檢查是否棄牌
 
+        // --- 1. 取得狀態資料 ---
+        const isActive = gameState.activePlayers[i];
+        const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i]; // 確保 foldedPlayers 存在
+
+        // --- 2. 定義顯示用的變數 (必須在 innerHTML 之前) ---
+        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
+        let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
+
+        // 棄牌按鈕的樣式與文字
+        const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
+        const foldBtnText = isFolded ? "復原" : "Fold";
+
+        // 卡片的 CSS class (若棄牌則變暗)
+        const foldClass = (isActive && isFolded) ? 'folded' : '';
+
+        // --- 3. 設定座位屬性 ---
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
 
-        let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
-
-        // 狀態文字顯示
-        let statusText = "(休息)";
-        if (isActive) {
-            statusText = isFolded ? "(Fold)" : "(參加)";
-        }
-
+        // 點擊座位開啟選牌器
         seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
-        // 卡片是否要加 .folded class
-        const foldClass = (isActive && isFolded) ? 'folded' : '';
-
-        // 按鈕文字
-        const foldBtnText = isFolded ? "復原" : "Fold";
-        const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
-
+        // --- 4. 產生 HTML 結構 ---
         seat.innerHTML = `
             <div class="seat-label" onclick="event.stopPropagation();">
-                <span onclick="togglePlayer(${i})">${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span></span>
+                <span onclick="togglePlayer(${i})">
+                    ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
+                </span>
                 
                 <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
-                        style="${foldBtnStyle}"
+                        style="${foldBtnStyle} margin-left:5px; vertical-align:middle;"
                         onclick="event.stopPropagation(); toggleFold(${i})">
                     ${foldBtnText}
                 </button>
@@ -71,12 +80,20 @@ function initTable() {
             
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
+
+        // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
 
-        // 恢復卡片內容 (如果有選過牌)
-        updateCardVisuals(i);
+        // 呼叫輔助函式更新卡片花色與點數
+        if (typeof updateCardVisuals === 'function') {
+            updateCardVisuals(i);
+        }
     }
-    updatePositions();
+
+    // 更新莊家按鈕位置
+    if (typeof updatePositions === 'function') {
+        updatePositions();
+    }
 }
 
 // 新增一個輔助函式來恢復卡片顯示 (不然 initTable 會把牌變回 ?)
@@ -412,21 +429,23 @@ function closeSelector() {
  * [功能] 切換玩家棄牌狀態
  */
 function toggleFold(playerId) {
-    // 只有在玩家「參加」時才能 Fold
+    // 只有參加中的玩家可以 Fold
     if (!gameState.activePlayers[playerId]) return;
 
-    // 切換狀態
+    // 切換棄牌狀態
     if (gameState.foldedPlayers[playerId]) {
-        delete gameState.foldedPlayers[playerId]; // 恢復
+        delete gameState.foldedPlayers[playerId];
     } else {
-        gameState.foldedPlayers[playerId] = true; // 棄牌
+        gameState.foldedPlayers[playerId] = true;
     }
 
-    // 重新渲染介面 (更新按鈕文字、卡片樣式)
+    // 重要：狀態改變後要重新渲染桌面，按鈕文字才會從 Fold 變成 復原
     initTable();
 
-    // 如果想要直接重新計算勝率，可以把下面這行註解打開
-    calculateOdds();
+    // 如果有選牌，就順便更新勝率 (選用)
+    if (Object.keys(gameState.selectedCards).length > 0) {
+        calculateOdds();
+    }
 }
 
 /**
