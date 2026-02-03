@@ -81,7 +81,6 @@ function initTable() {
             <div class="win-rate" id="win-p${i}">--%</div>
         `;
 
-        // --- 5. 將座位加入桌面並恢復卡片視覺 ---
         placeholder.appendChild(seat);
 
         // 呼叫輔助函式更新卡片花色與點數
