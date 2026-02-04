@@ -409,47 +409,30 @@ function getIdsInGroup(groupKey) {
     }
 }
 
-/**
- * [功能] 隨機補齊剩餘的公牌 (支援自動與混合模式)
- */
 function dealRandomCommunityCards() {
-    // 1. 準備牌堆
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
-
-    // 2. 過濾已使用的牌
     const usedCards = Object.values(gameState.selectedCards);
     let remainingDeck = fullDeck.filter(card => !usedCards.includes(card));
 
-    // 3. 洗牌
+    // 洗牌
     for (let i = remainingDeck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
     }
 
     let changed = false;
-    // 4. 發牌
     for (let i = 0; i < 5; i++) {
         const targetId = `b${i}`;
-        // 如果這個位置沒牌，才補牌
-        if (!gameState.selectedCards[targetId]) {
-            if (remainingDeck.length > 0) {
-                // A. 先更新資料狀態 (這是關鍵)
-                gameState.selectedCards[targetId] = remainingDeck.pop();
-
-                // B. 呼叫原本的更新函式 (它會自己去讀 gameState)
-                updateCardUI(targetId);
-
-                changed = true;
-            }
+        if (!gameState.selectedCards[targetId] && remainingDeck.length > 0) {
+            gameState.selectedCards[targetId] = remainingDeck.pop();
+            changed = true;
         }
     }
 
     if (changed) {
-        initTable();
+        initTable(); // 重新渲染，Fold 按鈕就會跳出來
         document.getElementById('status-text').innerText = "公牌已隨機補齊";
-    } else {
-        alert("公牌已滿，無需發牌。如欲重新開始，請按重置。");
     }
 }
 
@@ -499,7 +482,6 @@ function resetTable() {
     }
     // 建議在 resetTable 最後加這一行來刷新 UI
     initTable();
-    updatePositions();
 }
 
 /* =========================================

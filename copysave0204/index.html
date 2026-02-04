@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>德州撲克 9人桌專業模擬器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<style>
+    /* 在這裡微調 CSS 讓區域點擊感更明顯 */
+    .table-container {
+        position: relative;
+        width: 850px;
+        height: 500px;
+        background: var(--felt);
+        border: 15px solid #3d2b1f;
+        border-radius: 250px;
+        margin: 80px auto;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    }
+</style>
+
+<body>
+
+    <h1>德州撲克 9 人互動發牌桌</h1>
+
+    <div id="selector-overlay" onclick="closeSelector()">
+        <div class="selector-container" onclick="event.stopPropagation()">
+            <div id="floating-tip">
+                連續點選多張牌以完成發牌，點擊外圍黑色區域關閉
+            </div>
+            <div class="selector-grid" id="card-grid"></div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="board-area" id="community-board" onclick="openGroupSelector('board')">
+            <div class="card empty" id="b0">?</div>
+            <div class="card empty" id="b1">?</div>
+            <div class="card empty" id="b2">?</div>
+            <div class="card empty" id="b3">?</div>
+            <div class="card empty" id="b4">?</div>
+        </div>
+
+        <div id="seats-placeholder"></div>
+    </div>
+    <div class="control-box">
+        <div class="status-panel">
+            <p id="status-text">點擊卡片區域進行發牌</p>
+            <span id="pos-info">等待玩家加入....</span>
+        </div>
+
+        <div class="button-group">
+            <button onclick="rotateDealer()" class="action-btn dealer-btn">順時針換莊 (Rotate)</button>
+            <button onclick="calculateOdds()" class="action-btn calc-btn">計算勝率</button>
+            <button onclick="resetTable()" class="action-btn reset-btn">清空桌面</button>
+        </div>
+    </div>
+
+    <script src="poker-core.js"></script>
+    <script src="poker-engine.js"></script>
+    <script src="poker-ui.js"></script>
+</body>
+
+</html>
