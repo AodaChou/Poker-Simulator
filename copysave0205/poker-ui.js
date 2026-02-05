@@ -1,6 +1,11 @@
+/* =========================================
+   poker-ui.js
+   負責桌面渲染、互動事件、選牌邏輯與特效呈現
+   ========================================= */
+
 /**
- * [功能] 初始化桌面座位、按鈕與玩家狀態
- * 確保只要玩家是「參加」狀態，無論何時都顯示 Fold 按鈕
+ * [功能] 初始化桌面
+ * 產生 9 個座位的 HTML，包含暱稱、卡片、Fold 按鈕、位置標籤
  */
 function initTable() {
     const placeholder = document.getElementById('seats-placeholder');
@@ -10,41 +15,29 @@ function initTable() {
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
-
-        // --- 1. 取得最新狀態 ---
         const isActive = gameState.activePlayers[i];
-        // 確保 foldedPlayers 物件存在，避免讀取錯誤
         const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i];
-
-        // --- 2. 核心修正：定義顯示邏輯 ---
-        // 只要是參加者 (isActive)，就顯示按鈕，不論有無選牌
-        // 判斷桌面上是否已經有任何牌被選了 (代表遊戲進行中)
         const isGameStarted = Object.keys(gameState.selectedCards).length > 0;
 
-        // 只要是參加者 (isActive) 且遊戲已開始，就顯示按鈕
+        // Fold 按鈕顯示邏輯
         const foldBtnStyle = (isActive && isGameStarted) ? "display:inline-block;" : "display:none;";
         const foldBtnText = isFolded ? "復原" : "Fold";
 
-        // 標籤文字
         let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
         let statusText = isActive ? (isFolded ? "(Fold)" : "(參加)") : "(休息)";
-
-        // 卡片視覺效果
         const foldClass = (isActive && isFolded) ? 'folded' : '';
 
-        // --- 3. 設定座位基本屬性 ---
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
-        // 點擊座位整體仍可開啟選牌器
-        seat.setAttribute('onclick', `openGroupSelector('p${i}')`);
 
-        // --- 4. 產生 HTML 結構 ---
+        // 點擊座位可開啟該玩家的選牌 (整組)
+        seat.setAttribute('onclick', `openSelector('p${i}c1')`);
+
         seat.innerHTML = `
             <div class="seat-label" onclick="event.stopPropagation();">
                 <span onclick="togglePlayer(${i})">
                     ${labelText} <span id="status-p${i}" style="font-size:10px">${statusText}</span>
                 </span>
-                
                 <button class="btn-fold ${isFolded ? 'is-folded' : ''}" 
                         style="${foldBtnStyle} margin-left:8px; vertical-align:middle;"
                         onclick="event.stopPropagation(); toggleFold(${i})">
@@ -63,204 +56,61 @@ function initTable() {
         `;
 
         placeholder.appendChild(seat);
+        updateCardVisuals(i);
+    }
 
-        // --- 5. 更新卡片視覺 (確保選過的牌能顯示出來) ---
-        if (typeof updateCardVisuals === 'function') {
-            updateCardVisuals(i);
+    updatePositions();
+}
+
+/**
+ * [功能] 開啟選牌視窗
+ * 整合了「點擊公牌」與「點擊玩家牌」的邏輯
+ * 並自動鎖定該群組的第一個空位
+ */
+function openSelector(targetId) {
+    // 1. 解析目標群組 (是公牌 board 還是玩家 pX)
+    let groupKey = 'board';
+    if (targetId.startsWith('p')) {
+        const match = targetId.match(/p(\d+)/);
+        if (match) {
+            const pIndex = parseInt(match[1]);
+            groupKey = `p${pIndex}`;
+            // 如果玩家沒參加，自動讓他加入
+            if (!gameState.activePlayers[pIndex]) {
+                togglePlayer(pIndex);
+            }
         }
+    } else if (targetId.startsWith('b')) {
+        groupKey = 'board';
     }
 
-    // 初始化莊家/SB/BB位置
-    if (typeof updatePositions === 'function') {
-        updatePositions();
-    }
-}
+    gameState.activeGroup = groupKey;
 
-/**
- * [功能] 切換玩家棄牌狀態
- */
-function toggleFold(playerId) {
-    // 只有參加中的玩家可以 Fold
-    if (!gameState.activePlayers[playerId]) return;
-
-    // 切換棄牌狀態
-    if (gameState.foldedPlayers[playerId]) {
-        delete gameState.foldedPlayers[playerId];
-    } else {
-        gameState.foldedPlayers[playerId] = true;
-    }
-
-    // 重要：狀態改變後要重新渲染桌面，按鈕文字才會從 Fold 變成 復原
-    initTable();
-
-    // 如果有選牌，就順便更新勝率 (選用)
-    if (Object.keys(gameState.selectedCards).length > 0) {
-        calculateOdds();
-    }
-}
-
-function togglePlayer(pIndex) {
-    if (pIndex === 1) return;
-
-    const seat = document.getElementById(`seat-p${pIndex}`);
-    const statusSpan = document.getElementById(`status-p${pIndex}`);
-    const winRate = document.getElementById(`win-p${pIndex}`);
-
-    if (gameState.activePlayers[pIndex]) {
-        delete gameState.activePlayers[pIndex];
-        seat.classList.remove('active');
-        statusSpan.innerText = "(休息)";
-        winRate.innerText = "--%";
-        // 清除該玩家已選的牌
-        delete gameState.selectedCards[`p${pIndex}c1`];
-        delete gameState.selectedCards[`p${pIndex}c2`];
-        updateCardUI(`p${pIndex}c1`);
-        updateCardUI(`p${pIndex}c2`);
-    } else {
-        gameState.activePlayers[pIndex] = true;
-        seat.classList.add('active');
-        statusSpan.innerText = "(參加)";
-    }
-}
-
-/**
- * [功能] 更新所有玩家的位置標籤 (D, SB, BB, UTG)
- * [觸發時機] 1. 初始化 2. 點擊換莊按鈕 3. 玩家加入或離開 (togglePlayer)
- */
-function updatePositions() {
-    // 1. 取得所有參加玩家
-    const activeIds = Object.keys(gameState.activePlayers).map(Number).sort((a, b) => a - b);
-    const infoSpan = document.getElementById('pos-info');
-
-    // 隱藏舊的懸浮 D 鈕 (如果 HTML 還留著的話)
-    const oldDBtn = document.getElementById('dealer-btn');
-    if (oldDBtn) oldDBtn.style.display = 'none';
-
-    // 2. 清除所有座位旁的舊標籤容器內容
-    for (let i = 1; i <= 9; i++) {
-        const badgeContainer = document.getElementById(`badge-p${i}`);
-        if (badgeContainer) badgeContainer.innerHTML = '';
-    }
-
-    // 3. 檢查人數
-    if (activeIds.length < 2) {
-        if (infoSpan) infoSpan.innerText = "等待玩家加入....";
-        return;
-    }
-
-    // 4. 確認目前莊家玩家
-    if (!gameState.activePlayers[gameState.dealerPos]) {
-        gameState.dealerPos = activeIds[0];
-    }
-    const dealer = gameState.dealerPos;
-
-    // --- 關鍵修改：將莊家 D 直接標示在玩家旁邊 ---
-    addBadge(dealer, 'D', 'pos-d');
-
-    // 5. 根據人數分配 SB, BB, UTG
-    let sb, bb, utg;
-
-    if (activeIds.length === 2) {
-        /** 單挑模式 (Heads-up) **/
-        // 莊家是 SB，對手是 BB
-        sb = dealer;
-        bb = getNextActivePlayer(dealer);
-
-        addBadge(sb, 'SB', 'pos-sb');
-        addBadge(bb, 'BB', 'pos-bb');
-
-        if (infoSpan) infoSpan.innerText = `HU模式: P${sb}(D/SB) vs P${bb}(BB)`;
-    } else {
-        /** 多人模式 **/
-        sb = getNextActivePlayer(dealer);
-        bb = getNextActivePlayer(sb);
-        utg = getNextActivePlayer(bb);
-
-        addBadge(sb, 'SB', 'pos-sb');
-        addBadge(bb, 'BB', 'pos-bb');
-
-        if (activeIds.length >= 4) {
-            addBadge(utg, 'UTG', 'pos-utg');
-        }
-
-        if (infoSpan) infoSpan.innerText = `莊家位：P${dealer}`;
-    }
-}
-
-/**
- * [功能] 順時針輪替莊家位置 (D Button)
- * [邏輯] 尋找下一位 activePlayers 為 true 的玩家
- */
-function rotateDealer() {
-    const activeIds = Object.keys(gameState.activePlayers).map(Number).sort((a, b) => a - b);
-    if (activeIds.length < 2) {
-        alert("至少需要兩位玩家才能輪替莊家！");
-        return;
-    }
-
-    // 呼叫輔助函式尋找下一位活躍玩家
-    let nextDealer = getNextActivePlayer(gameState.dealerPos);
-    if (nextDealer) {
-        gameState.dealerPos = nextDealer;
-        updatePositions(); // 更新視覺上的 D 標籤與盲注文字
-    }
-}
-
-
-/**
- * [輔助函式] 在指定玩家座位上產生顏色標籤
- * @param {number} playerId - 玩家編號
- * @param {string} text - 顯示文字 (SB, BB, UTG)
- * @param {string} className - CSS 樣式類別 (pos-sb, pos-bb, pos-utg)
- */
-/**
- * [輔助函式] 在指定玩家姓名旁新增標籤
- */
-function addBadge(playerId, text, className) {
-    const container = document.getElementById(`badge-p${playerId}`);
-    if (container) {
-        const span = document.createElement('span');
-        span.className = `pos-badge ${className}`;
-        span.innerText = text;
-        container.appendChild(span);
-    }
-}
-
-// 開啟選牌視窗：設定「目前群組」，並自動尋找第一個空位
-function openGroupSelector(groupKey) {
-    // 確保玩家已啟用
-    if (groupKey.startsWith('p')) {
-        const pIndex = parseInt(groupKey.replace('p', ''));
-        if (!gameState.activePlayers[pIndex]) {
-            togglePlayer(pIndex);
-        }
-    }
-
-    gameState.activeGroup = groupKey; // 設定目前是誰在選牌 (重要!)
-
-    // 自動將目標設定為該群組的第一個空位 (若全滿則不選任何目標，等待使用者點擊刪除)
-    autoSetTargetToFirstEmpty();
+    // 2. 自動跳轉到該群組的第一個空位 (UX 優化)
+    // 如果使用者點的是 p1c2 但 p1c1 是空的，自動跳回 p1c1
+    autoSetTargetToFirstEmpty(targetId);
 
     renderSelector();
     document.getElementById('selector-overlay').style.display = 'flex';
 }
 
-// 渲染選牌列表 (邏輯修正：區分「自己群組」與「他人群組」)
+/**
+ * [功能] 渲染 52 張卡片選單
+ * 區分「我選的牌(綠色)」與「別人/公牌選的牌(鎖定)」
+ */
 function renderSelector() {
     const grid = document.getElementById('card-grid');
     grid.innerHTML = '';
 
-    // 取得目前群組擁有的所有牌 (用於判斷是否為自己所選)
     const currentGroupIds = getIdsInGroup(gameState.activeGroup);
 
     suits.forEach(s => {
         values.forEach(v => {
             const cardStr = v + s;
-
-            // 檢查這張牌目前被誰持有
             let isUsed = false;
             let usedById = null;
 
+            // 檢查牌是否已被使用
             for (const [key, val] of Object.entries(gameState.selectedCards)) {
                 if (val === cardStr) {
                     isUsed = true;
@@ -274,27 +124,20 @@ function renderSelector() {
             div.style.color = suitColors[s];
             div.innerText = cardStr;
 
-            // 決定鎖定狀態
             let isLocked = false;
             let isOwnedByMe = false;
 
             if (isUsed) {
                 div.classList.add('selected');
-
-                // 判斷持有者是否在目前的操作群組內
                 if (currentGroupIds.includes(usedById)) {
-                    // 是我自己群組選的 -> 顯示綠色，允許點擊 (移除)
                     isOwnedByMe = true;
-                    div.classList.add('owned-by-me'); // 用於 CSS 樣式
+                    div.classList.add('owned-by-me');
                 } else {
-                    // 是別人選的 (例如選 P1 時，這張牌在 Board) -> 嚴格鎖定
                     isLocked = true;
                     div.classList.add('locked');
-                    div.title = "其他玩家或公牌已持有";
                 }
             }
 
-            // 綁定點擊事件
             if (!isLocked) {
                 div.onclick = () => handleCardClick(cardStr, isUsed, usedById, isOwnedByMe);
             } else {
@@ -306,125 +149,57 @@ function renderSelector() {
     });
 }
 
-function closeSelector() {
-    document.getElementById('selector-overlay').style.display = 'none';
-    gameState.currentPickingTarget = null;
-    gameState.activeGroup = null;
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
-}
-
-// 處理選牌與取消 (核心邏輯：取消後自動補位)
+/**
+ * [核心功能] 處理選牌點擊
+ * 包含：選牌、取消選牌、自動跳下一格、計算勝率、觸發贏家特效
+ */
 function handleCardClick(cardStr, isUsed, usedById, isOwnedByMe) {
+    const targetId = gameState.currentPickingTarget;
 
-    // 狀況 A: 點擊一張「我這個群組已經選走」的牌 -> 執行移除 (取消選取)
+    // 1. 移除舊的贏家特效 (只要牌變動，舊特效就無效了)
+    removeWinnerEffects();
+
+    // 情況 A: 取消選取 (點擊自己已選的牌)
     if (isUsed && isOwnedByMe) {
-        // 1. 從紀錄中刪除
         delete gameState.selectedCards[usedById];
         updateCardUI(usedById);
-
-        // 2. 關鍵邏輯：一旦有空格，立刻將目標 (Target) 重置為最前面的空格
-        // 這樣下次點擊就會填入這個剛空出來的位置 (或者更前面的位置)
         autoSetTargetToFirstEmpty();
-
-        // 3. 重新渲染選牌視窗 (該牌會變回未選取狀態)
         renderSelector();
+        // 牌變少了，重新計算勝率 (不觸發特效)
+        if (typeof calculateOdds === 'function') calculateOdds();
         return;
     }
 
-    // 狀況 B: 選一張新牌 (前提：必須有合法的目標格子)
-    if (gameState.currentPickingTarget) {
-        // 填入牌
-        gameState.selectedCards[gameState.currentPickingTarget] = cardStr;
-        updateCardUI(gameState.currentPickingTarget);
+    // 情況 B: 選取新牌
+    if (targetId) {
+        gameState.selectedCards[targetId] = cardStr;
+        updateCardUI(targetId);
 
-        // 選完後，自動跳到下一個空格
+        // 選完這張，自動跳去下一張空格
         autoSetTargetToFirstEmpty();
-
         renderSelector();
-        initTable();
-    } else {
-        // 如果目前沒有目標 (例如 5 張已滿)，但使用者點擊了一張沒被選過的牌
-        // 這裡可以選擇不動作，或者提示使用者先刪除一張
-        // 依照您的需求：不做動作，使用者必須先點選已選的牌來取消，才能騰出空間
-    }
-}
 
-// 更新桌面 UI
-function updateCardUI(elementId) {
-    const el = document.getElementById(elementId);
-    const cardVal = gameState.selectedCards[elementId];
-
-    if (el && cardVal) {
-        el.innerText = cardVal;
-        el.style.color = suitColors[cardVal.slice(-1)];
-        el.classList.remove('empty');
-        el.style.background = "white";
-        const suit = cardVal.slice(-1);
-        el.className = `card ${suitColors[suit]}`; // 這會套用紅或黑
-    } else {
-        el.innerText = "?";
-        el.style.color = "white";
-        el.classList.add('empty');
-        el.style.background = "";
-    }
-}
-
-// 新增一個輔助函式來恢復卡片顯示 (不然 initTable 會把牌變回 ?)
-function updateCardVisuals(playerId) {
-    ['c1', 'c2'].forEach(suffix => {
-        const key = `p${playerId}${suffix}`;
-        const cardVal = gameState.selectedCards[key];
-        const el = document.getElementById(key);
-        if (cardVal && el) {
-            el.className = `card ${gameState.foldedPlayers[playerId] ? 'folded' : ''}`;
-            const suit = cardVal.slice(-1);
-            
-            // 確保加入紅/黑 class
-            el.classList.add(suitColors[suit]); 
-            
-            el.innerText = cardVal;
+        // [關鍵修復]：選牌後計算勝率，並檢查是否需要「閃爍金光」
+        if (typeof calculateOdds === 'function') {
+            calculateOdds(() => {
+                // Callback: 檢查公牌是否滿 5 張
+                const boardCount = countBoardCards();
+                if (boardCount === 5) {
+                    showWinnerEffect();
+                }
+            });
         }
-    });
-}
-
-// 自動尋找並鎖定第一個空位
-function autoSetTargetToFirstEmpty() {
-    const groupIds = getIdsInGroup(gameState.activeGroup);
-
-    // 找出第一個沒有被填值的 ID
-    let firstEmpty = groupIds.find(id => !gameState.selectedCards[id]);
-
-    // 設定目標 (如果全滿，firstEmpty 為 undefined，這時 currentPickingTarget 會變 null，這也是對的)
-    gameState.currentPickingTarget = firstEmpty || null;
-
-    // 更新畫面上的高亮框
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
-    if (firstEmpty) {
-        document.getElementById(firstEmpty).classList.add('editing');
-    }
-}
-
-// 取得該群組包含的所有 ID (順序很重要：b0->b4, c1->c2)
-function getIdsInGroup(groupKey) {
-    if (groupKey === 'board') {
-        return ['b0', 'b1', 'b2', 'b3', 'b4'];
-    } else {
-        // groupKey 例如 'p1'
-        return [`${groupKey}c1`, `${groupKey}c2`];
     }
 }
 
 /**
- * [功能] 隨機補齊剩餘的公牌 (支援自動與混合模式)
- */
-/**
- * [功能] 智慧階段式隨機發公牌
- * 1. 0張 -> 發3張 (Flop) + 算勝率
- * 2. 3張 -> 發1張 (Turn) + 算勝率
- * 3. 4張 -> 發1張 (River) + 算勝率 + 顯示特效
+ * [功能] 隨機發公牌 (Flop -> Turn -> River)
  */
 function dealRandomCommunityCards() {
-    // 1. 準備牌堆
+    // 移除舊特效
+    removeWinnerEffects();
+
+    // 準備牌堆
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
     const usedCards = Object.values(gameState.selectedCards);
@@ -436,143 +211,63 @@ function dealRandomCommunityCards() {
         [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
     }
 
-    // 2. 判斷目前階段 (Flop / Turn / River)
-    let boardCount = 0;
-    for (let i = 0; i < 5; i++) {
-        if (gameState.selectedCards[`b${i}`]) boardCount++;
-    }
-
+    let boardCount = countBoardCards();
     let cardsToDeal = 0;
     let stageName = "";
 
     if (boardCount === 0) {
-        cardsToDeal = 3; // Flop: 一次發3張
+        cardsToDeal = 3;
         stageName = "翻牌 (Flop)";
     } else if (boardCount >= 3 && boardCount < 5) {
-        cardsToDeal = 1; // Turn/River: 一次補1張
+        cardsToDeal = 1;
         stageName = (boardCount === 3) ? "轉牌 (Turn)" : "河牌 (River)";
     } else if (boardCount === 5) {
         alert("公牌已全數發放完畢。");
         return;
     } else {
-        // 例外狀況處理 (例如手動選了1張)
         cardsToDeal = 3 - boardCount;
         if (cardsToDeal < 1) cardsToDeal = 1;
         stageName = "補齊翻牌";
     }
 
-    // 3. 執行發牌 (嚴格控制迴圈次數)
     let dealtCount = 0;
     for (let i = 0; i < 5; i++) {
-        if (dealtCount >= cardsToDeal) break; // 發夠了就停
-
+        if (dealtCount >= cardsToDeal) break;
         const targetId = `b${i}`;
-        // 只有該格是空的才填入
         if (!gameState.selectedCards[targetId] && remainingDeck.length > 0) {
-            const newCard = remainingDeck.pop();
-            gameState.selectedCards[targetId] = newCard;
-            
-            // 更新 UI (並觸發紅黑變色)
+            gameState.selectedCards[targetId] = remainingDeck.pop();
             updateCardUI(targetId);
-            
             dealtCount++;
         }
     }
 
     document.getElementById('status-text').innerText = `已發出 ${stageName}`;
 
-    // 4. 計算勝率 (並傳入特效 callback)
+    // [關鍵修復]：計算勝率，如果現在滿5張了，就顯示特效
     if (typeof calculateOdds === "function") {
-        // 只有當公牌發滿 5 張時，才傳入「贏家閃爍特效」函式
-        if (boardCount + dealtCount === 5) {
-            calculateOdds(showWinnerEffect); 
+        const newTotal = boardCount + dealtCount;
+        if (newTotal === 5) {
+            calculateOdds(showWinnerEffect);
         } else {
-            calculateOdds(); // 還沒滿5張，只算勝率不閃爍
+            calculateOdds();
         }
     }
-}
-
-/**
- * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
- */
-function resetTable() {
-    // 增加確認對話框，避免誤觸
-    if (!confirm("確定要清空桌面上的牌嗎？(玩家設定將保留)")) return;
-
-    // 1. 清空記憶體中的選牌資料
-    gameState.selectedCards = {};
-    gameState.foldedPlayers = {}; // 新增：重置所有棄牌狀態
-
-    // 2. 重置公牌區域 (b0 - b4)
-    for (let i = 0; i < 5; i++) {
-        const el = document.getElementById(`b${i}`);
-        if (el) {
-            el.className = 'card empty'; // 移除花色樣式，變回虛線框
-            el.innerText = '?';          // 文字變回問號
-        }
-    }
-
-    // 3. 重置所有玩家的手牌與勝率 (p1 - p9)
-    for (let i = 1; i <= 9; i++) {
-        // 重置兩張手牌
-        ['c1', 'c2'].forEach(suffix => {
-            const el = document.getElementById(`p${i}${suffix}`);
-            if (el) {
-                el.className = 'card empty';
-                el.innerText = '?';
-            }
-        });
-
-        // 重置勝率顯示
-        const winEl = document.getElementById(`win-p${i}`);
-        if (winEl) {
-            winEl.innerText = '--%';
-            winEl.style.color = ''; // 移除顏色設定
-        }
-    }
-
-    // 4. 更新狀態列提示
-    const statusText = document.getElementById('status-text');
-    if (statusText) {
-        statusText.innerText = "桌面已清空，請開始新的一局";
-    }
-    // 建議在 resetTable 最後加這一行來刷新 UI
-    initTable();
-    updatePositions();
 }
 
 /* =========================================
-   2. 位置與輪替邏輯 (新增部分)
+   輔助功能與視覺特效
    ========================================= */
 
-// 尋找下一個「有參加」的玩家 ID
-function getNextActivePlayer(currentId) {
-    let next = currentId + 1;
-    if (next > 9) next = 1;
-
-    // 循環查找，最多找 9 次防止無窮迴圈
-    let count = 0;
-    while (!gameState.activePlayers[next] && count < 9) {
-        next++;
-        if (next > 9) next = 1;
-        count++;
-    }
-
-    // 如果找不到其他人 (例如只有一人在場)，回傳自己或 null
-    return gameState.activePlayers[next] ? next : null;
-}
-
-/**
- * [功能] 在 River 階段為最高勝率（獲勝者）加上閃爍特效
- */
+// 顯示贏家特效 (金光閃爍)
 function showWinnerEffect() {
     let maxWin = -1;
     let winners = [];
 
-    // 找出畫面上勝率最高的人
+    // 找出勝率最高者
     for (let i = 1; i <= 9; i++) {
         const winEl = document.getElementById(`win-p${i}`);
-        if (winEl && winEl.innerText !== '--%') {
+        // 排除 Fold 或無數據
+        if (winEl && winEl.innerText !== '--%' && winEl.innerText !== 'Fold') {
             const prob = parseFloat(winEl.innerText);
             if (prob > maxWin) {
                 maxWin = prob;
@@ -583,13 +278,251 @@ function showWinnerEffect() {
         }
     }
 
-    // 為贏家座位加上 CSS 特效
+    // 套用 CSS 動畫類別
     winners.forEach(id => {
-        const seat = document.querySelector(`.seat[data-id="${id}"]`);
+        // [修正] 使用正確的 ID 選擇器
+        const seat = document.getElementById(`seat-p${id}`);
         if (seat) {
             seat.classList.add('winner-flash');
-            // 3秒後移除特效，方便下一局
-            setTimeout(() => seat.classList.remove('winner-flash'), 3000);
         }
     });
+}
+
+// 移除所有贏家特效
+function removeWinnerEffects() {
+    document.querySelectorAll('.seat').forEach(el => {
+        el.classList.remove('winner-flash');
+    });
+}
+
+// 計算目前公牌數量
+function countBoardCards() {
+    let count = 0;
+    for (let i = 0; i < 5; i++) {
+        if (gameState.selectedCards[`b${i}`]) count++;
+    }
+    return count;
+}
+
+// 更新單張卡片 UI
+function updateCardUI(elementId) {
+    const el = document.getElementById(elementId);
+    const cardVal = gameState.selectedCards[elementId];
+    if (el) {
+        if (cardVal) {
+            el.innerText = cardVal;
+            const suit = cardVal.slice(-1);
+            el.className = `card ${suitColors[suit]}`;
+        } else {
+            el.innerText = "?";
+            el.className = 'card empty';
+        }
+    }
+}
+
+// 關閉選單
+function closeSelector() {
+    document.getElementById('selector-overlay').style.display = 'none';
+    gameState.currentPickingTarget = null;
+    gameState.activeGroup = null;
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
+}
+
+// 自動將目標設定為該群組的第一個空位
+function autoSetTargetToFirstEmpty(clickTargetId) {
+    const groupIds = getIdsInGroup(gameState.activeGroup);
+
+    // 如果傳入的點擊目標本身就是空的，優先選它
+    if (clickTargetId && !gameState.selectedCards[clickTargetId]) {
+        gameState.currentPickingTarget = clickTargetId;
+    } else {
+        // 否則找第一個空格
+        const firstEmpty = groupIds.find(id => !gameState.selectedCards[id]);
+        gameState.currentPickingTarget = firstEmpty || null;
+    }
+
+    // 更新綠色高亮框
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
+    if (gameState.currentPickingTarget) {
+        document.getElementById(gameState.currentPickingTarget).classList.add('editing');
+    }
+}
+
+// 取得群組內的 ID 列表
+function getIdsInGroup(groupKey) {
+    if (groupKey === 'board') return ['b0', 'b1', 'b2', 'b3', 'b4'];
+    if (groupKey && groupKey.startsWith('p')) return [`${groupKey}c1`, `${groupKey}c2`];
+    return [];
+}
+
+// 恢復卡片視覺 (用於 initTable)
+function updateCardVisuals(playerId) {
+    ['c1', 'c2'].forEach(suffix => {
+        const key = `p${playerId}${suffix}`;
+        updateCardUI(key);
+        // 如果 Fold，加上半透明效果
+        if (gameState.foldedPlayers && gameState.foldedPlayers[playerId]) {
+            const el = document.getElementById(key);
+            if (el) el.classList.add('folded');
+        }
+    });
+}
+
+// 切換玩家 Fold 狀態
+function toggleFold(playerId) {
+    if (!gameState.activePlayers[playerId]) return;
+    if (!gameState.foldedPlayers) gameState.foldedPlayers = {};
+
+    if (gameState.foldedPlayers[playerId]) {
+        delete gameState.foldedPlayers[playerId];
+    } else {
+        gameState.foldedPlayers[playerId] = true;
+    }
+    initTable();
+    if (Object.keys(gameState.selectedCards).length > 0) calculateOdds();
+}
+
+// 切換玩家 參加/休息
+function togglePlayer(pIndex) {
+    if (pIndex === 1) return;
+    const seat = document.getElementById(`seat-p${pIndex}`);
+
+    if (gameState.activePlayers[pIndex]) {
+        delete gameState.activePlayers[pIndex];
+        delete gameState.selectedCards[`p${pIndex}c1`];
+        delete gameState.selectedCards[`p${pIndex}c2`];
+    } else {
+        gameState.activePlayers[pIndex] = true;
+    }
+    initTable();
+}
+
+/**
+ * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
+ * 修正重點：使用統一的 UI 更新函式，並確保清除贏家特效
+ */
+/**
+ * [功能] 重置桌面並自動切換莊家到下一位玩家
+ */
+function resetTable() {
+    // 增加確認對話框，避免誤觸
+    if (!confirm("確定要結算本局並開始下一局嗎？\n(將清空卡片並自動移動莊家位置)")) return;
+
+    // 1. 清空數據層
+    gameState.selectedCards = {};
+    gameState.foldedPlayers = {};
+
+    // 2. 清除贏家特效 (金光)
+    if (typeof removeWinnerEffects === 'function') {
+        removeWinnerEffects();
+    }
+
+    // 3. 【核心修正】順時針移動莊家位
+    rotateDealer();
+
+    // 4. 同步 UI 顯示
+    initTable(); // 重新渲染座位與按鈕
+
+    // 手動同步公牌 UI (變回問號)
+    for (let i = 0; i < 5; i++) {
+        updateCardUI(`b${i}`);
+    }
+
+    // 手動同步所有玩家勝率文字
+    for (let i = 1; i <= 9; i++) {
+        const winEl = document.getElementById(`win-p${i}`);
+        if (winEl) {
+            winEl.innerText = '--%';
+            winEl.style.color = '';
+        }
+    }
+
+    // 5. 更新狀態提示
+    const statusText = document.getElementById('status-text');
+    if (statusText) {
+        statusText.innerText = `進入下一局，莊家已移至 P${gameState.dealerPos}`;
+    }
+}
+
+// 更新位置標籤 (D/SB/BB)
+function updatePositions() {
+    // 清除舊標籤
+    for (let i = 1; i <= 9; i++) {
+        const badge = document.getElementById(`badge-p${i}`);
+        if (badge) badge.innerHTML = '';
+    }
+
+    const activeIds = Object.keys(gameState.activePlayers).map(Number).sort((a, b) => a - b);
+    if (activeIds.length < 2) return;
+
+    if (!gameState.dealerPos || !gameState.activePlayers[gameState.dealerPos]) {
+        gameState.dealerPos = activeIds[0];
+    }
+
+    const dealer = gameState.dealerPos;
+    addBadge(dealer, 'D', 'pos-d');
+
+    // 簡單的 SB/BB 邏輯
+    let sb = getNextActivePlayer(dealer);
+    let bb = getNextActivePlayer(sb);
+    addBadge(sb, 'SB', 'pos-sb');
+    addBadge(bb, 'BB', 'pos-bb');
+}
+
+function getNextActivePlayer(currentId) {
+    let next = currentId + 1;
+    if (next > 9) next = 1;
+    let count = 0;
+    while (!gameState.activePlayers[next] && count < 9) {
+        next++;
+        if (next > 9) next = 1;
+        count++;
+    }
+    return gameState.activePlayers[next] ? next : currentId;
+}
+
+function addBadge(playerId, text, className) {
+    const container = document.getElementById(`badge-p${playerId}`);
+    if (container) {
+        const span = document.createElement('span');
+        span.className = `pos-badge ${className}`;
+        span.innerText = text;
+        container.appendChild(span);
+    }
+}
+
+/**
+ * [功能] 將莊家位置順時針移動到下一位「活躍」玩家
+ */
+function rotateDealer() {
+    // 使用現有的 getNextActivePlayer 尋找下一位沒在休息的人
+    const nextDealer = getNextActivePlayer(gameState.dealerPos);
+    
+    if (nextDealer !== null) {
+        gameState.dealerPos = nextDealer;
+        
+        // 更新位置標籤 (D, SB, BB, UTG)
+        updatePositions();
+        
+        console.log(`莊家已移至: P${nextDealer}`);
+    }
+}
+
+/**
+ * [輔助功能] 尋找下一個「有參加」的玩家 ID (順時針)
+ */
+function getNextActivePlayer(currentId) {
+    let next = currentId + 1;
+    if (next > 9) next = 1;
+
+    let count = 0;
+    // 循環查找 9 次，直到找到一位在 gameState.activePlayers 裡的玩家
+    while (!gameState.activePlayers[next] && count < 9) {
+        next++;
+        if (next > 9) next = 1;
+        count++;
+    }
+
+    // 如果繞了一圈都沒人參加，回傳原點或 null
+    return gameState.activePlayers[next] ? next : null;
 }

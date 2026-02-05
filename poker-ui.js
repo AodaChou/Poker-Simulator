@@ -304,19 +304,27 @@ function countBoardCards() {
     return count;
 }
 
-// 更新單張卡片 UI
-function updateCardUI(elementId) {
-    const el = document.getElementById(elementId);
-    const cardVal = gameState.selectedCards[elementId];
-    if (el) {
-        if (cardVal) {
-            el.innerText = cardVal;
-            const suit = cardVal.slice(-1);
-            el.className = `card ${suitColors[suit]}`;
-        } else {
-            el.innerText = "?";
-            el.className = 'card empty';
-        }
+/**
+ * [功能] 更新指定位置的卡片視覺狀態 (支援玩家手牌與公牌)
+ * @param {string} targetId - 例如 'p1c1', 'p5c2', 'b0', 'b1' ...
+ */
+function updateCardUI(targetId) {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const cardStr = gameState.selectedCards[targetId];
+
+    if (cardStr) {
+        // --- 狀態 A: 已選牌 ---
+        const suit = cardStr.slice(-1);
+        el.innerText = cardStr;
+        el.className = `card ${suitColors[suit] === 'red' ? 'red' : 'black'}`;
+        el.style.background = "white";
+    } else {
+        // --- 狀態 B: 未選牌 (顯示問號) ---
+        el.innerText = "?";
+        el.className = "card empty";
+        el.style.background = ""; // 恢復 CSS 預設背景
     }
 }
 
