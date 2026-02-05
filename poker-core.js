@@ -62,49 +62,54 @@ function initTable() {
 }
 
 /**
- * [功能] 當在選牌器點擊一張牌時觸發
+ * [功能] 在選牌器中點擊一張牌後執行的動作
  */
 function selectCard(cardStr) {
     const targetId = gameState.currentPickingTarget;
     if (!targetId) return;
 
-    // 1. 檢查牌是否已被他人選走
+    // 1. 檢查是否有重複選牌
     const isUsed = Object.entries(gameState.selectedCards).some(([id, val]) => id !== targetId && val === cardStr);
     if (isUsed) {
         alert("這張牌已經在桌面上囉！");
         return;
     }
 
-    // 2. 更新數據
+    // 2. 寫入數據層
     gameState.selectedCards[targetId] = cardStr;
 
-    // 3. 更新視覺
+    // 3. 更新視覺層 (不論是玩家還是公牌，統一調用 updateCardUI)
     updateCardUI(targetId);
 
-    // 4. 自動跳轉下一個位置
+    // 4. 自動跳轉下一張或關閉 (例如 b0 選完跳 b1)
     autoNextTarget(targetId);
-
-    // 5. 刷新選牌器（標記已選牌）
+    
+    // 5. 重新繪製網格更新 "已選" 灰掉的狀態
     renderSelector();
 }
 
 /**
- * [功能] 更新卡片 UI 視覺狀態
+ * [功能] 更新指定卡片 ID 的 HTML 顯示效果
  */
 function updateCardUI(targetId) {
     const el = document.getElementById(targetId);
     if (!el) return;
 
     const cardStr = gameState.selectedCards[targetId];
+
     if (cardStr) {
+        // --- 有選牌：顯示花色、數值、白色背景 ---
         const suit = cardStr.slice(-1);
         el.innerText = cardStr;
         el.className = `card ${suitColors[suit] === 'red' ? 'red' : 'black'}`;
         el.style.background = "white";
+        el.classList.remove('empty');
     } else {
+        // --- 沒選牌：顯示問號、虛線框 ---
         el.innerText = "?";
         el.className = "card empty";
-        el.style.background = "";
+        el.style.background = ""; // 恢復 CSS 預設綠色/透明
+        el.style.color = "";
     }
 }
 
@@ -207,14 +212,21 @@ function togglePlayer(id) {
 }
 
 /**
- * [功能] 開啟選牌器
+ * [功能] 開啟選牌器 (點擊任何卡片位時觸發)
+ * @param {string} targetId - 例如 'b0', 'p1c1'
  */
 function openSelector(targetId) {
+    console.log("正在為位置開啟選牌器:", targetId); // 除錯用
     gameState.currentPickingTarget = targetId;
-    renderSelector();
-    document.getElementById('selector-overlay').style.display = 'flex';
     
-    // 高亮目前的目標牌
+    // 1. 顯示選牌遮罩層
+    const overlay = document.getElementById('selector-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    
+    // 2. 重新繪製選牌網格 (為了標記哪些牌已被選走)
+    renderSelector();
+    
+    // 3. 高亮桌面目標 (讓使用者知道現在在選哪張)
     document.querySelectorAll('.card').forEach(c => c.classList.remove('highlight-active'));
     const targetEl = document.getElementById(targetId);
     if (targetEl) targetEl.classList.add('highlight-active');
