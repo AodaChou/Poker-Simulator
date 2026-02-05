@@ -584,11 +584,12 @@ body {
 
 /* --- 修正卡片顏色顯示 --- */
 .card.red {
-    color: #e63946 !important; /* 強制紅色 */
+    color: #e74c3c !important; /* 強制變紅 */
+    border-color: #e74c3c !important; /* 邊框也變紅 (選用) */
 }
 
 .card.black {
-    color: #2d3436 !important; /* 強制黑色 */
+    color: #2d3436 !important; /* 強制變黑 */
 }
 
 /* 確保空牌是灰白色的 */

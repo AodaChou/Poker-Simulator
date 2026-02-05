@@ -13,23 +13,19 @@ function calculateOdds(callback) {
         return;
     }
     document.getElementById('status-text').innerText = `模擬中：${activeIds.length} 人局...`;
-
-    // 傳入 callback 給 runSimulation
+    
+    // 關鍵修改：將 callback 傳給 runSimulation
     setTimeout(() => runSimulation(activeIds, callback), 50);
 }
 
 function runSimulation(playerIds, callback) {
-    const iterations = 50000; // 維持你的高次數模擬
+    const iterations = 50000; // 維持高次數模擬
     const wins = {};
 
-    // 1. 過濾出「真正參與比牌」的玩家 (排除 Fold 的人)
-    // 雖然 playerIds 傳進來的是所有 Active 的人，但我們要扣掉 Fold 的
+    // 1. 過濾出「真正參與比牌」的玩家
     const activeContestants = playerIds.filter(id => !gameState.foldedPlayers[id]);
-
-    // 初始化計分板
     activeContestants.forEach(id => wins[id] = 0);
 
-    // 如果沒人玩或只剩 0 人，直接結束
     if (activeContestants.length === 0) {
         document.getElementById('status-text').innerText = "沒有活躍玩家可計算";
         return;
@@ -37,15 +33,12 @@ function runSimulation(playerIds, callback) {
 
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
-
-    // 2. 關鍵：knownCards 包含「所有」桌上的牌 (包含已 Fold 玩家的牌)
-    // 這保證了 Fold 掉的牌不會被重新發出來
     const knownCards = Object.values(gameState.selectedCards);
 
+    // --- 開始大量模擬 ---
     for (let i = 0; i < iterations; i++) {
-        // 從牌堆移除已知牌 (包含 Fold 的牌)
         let deck = fullDeck.filter(c => !knownCards.includes(c));
-
+        
         // 洗牌
         for (let j = deck.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
@@ -53,7 +46,6 @@ function runSimulation(playerIds, callback) {
         }
 
         let board = [];
-        // 填補公牌
         for (let b = 0; b < 5; b++) {
             const bCard = gameState.selectedCards[`b${b}`];
             if (bCard) board.push(bCard);
@@ -63,15 +55,13 @@ function runSimulation(playerIds, callback) {
         let bestScore = -1;
         let winners = [];
 
-        // 3. 只計算「沒 Fold」的玩家的分數
         activeContestants.forEach(pid => {
             let c1 = gameState.selectedCards[`p${pid}c1`];
             let c2 = gameState.selectedCards[`p${pid}c2`];
-
-            // 補牌
             if (!c1) c1 = deck.pop();
             if (!c2) c2 = deck.pop();
-            // 這裡呼叫你的 getHandScore (確認你的檔案裡有這個函式)
+
+            // 呼叫原本有的 getHandScore
             const score = getHandScore([...board, c1, c2]);
             if (score > bestScore) {
                 bestScore = score;
@@ -83,12 +73,12 @@ function runSimulation(playerIds, callback) {
 
         winners.forEach(pid => wins[pid] += 1 / winners.length);
     }
+    // --- 模擬結束 ---
 
-    // 更新顯示
+    // 更新介面勝率
     playerIds.forEach(pid => {
         const el = document.getElementById(`win-p${pid}`);
         if (el) {
-            // 如果玩家 Fold 了，顯示 "Fold" 且無勝率
             if (gameState.foldedPlayers[pid]) {
                 el.innerText = 'Fold';
                 el.style.color = '#999';
@@ -101,7 +91,8 @@ function runSimulation(playerIds, callback) {
     });
 
     document.getElementById('status-text').innerText = "計算完成";
-    // [關鍵修改] 如果有傳入 callback (例如 showWinnerEffect)，現在才執行它！
+
+    // [關鍵] 如果有傳入特效函式，現在執行它！
     if (typeof callback === 'function') {
         callback();
     }

@@ -436,7 +436,7 @@ function dealRandomCommunityCards() {
         [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
     }
 
-    // 2. 判斷目前階段
+    // 2. 判斷目前階段 (Flop / Turn / River)
     let boardCount = 0;
     for (let i = 0; i < 5; i++) {
         if (gameState.selectedCards[`b${i}`]) boardCount++;
@@ -446,33 +446,33 @@ function dealRandomCommunityCards() {
     let stageName = "";
 
     if (boardCount === 0) {
-        cardsToDeal = 3; // Flop: 發3張
+        cardsToDeal = 3; // Flop: 一次發3張
         stageName = "翻牌 (Flop)";
     } else if (boardCount >= 3 && boardCount < 5) {
-        cardsToDeal = 1; // Turn/River: 每次補1張
+        cardsToDeal = 1; // Turn/River: 一次補1張
         stageName = (boardCount === 3) ? "轉牌 (Turn)" : "河牌 (River)";
     } else if (boardCount === 5) {
         alert("公牌已全數發放完畢。");
         return;
     } else {
-        // 例外狀況：如果不小心只有1張或2張，補滿到3張
+        // 例外狀況處理 (例如手動選了1張)
         cardsToDeal = 3 - boardCount;
+        if (cardsToDeal < 1) cardsToDeal = 1;
         stageName = "補齊翻牌";
     }
 
-    // 3. 執行發牌 (嚴格迴圈)
+    // 3. 執行發牌 (嚴格控制迴圈次數)
     let dealtCount = 0;
     for (let i = 0; i < 5; i++) {
-        // 如果已經發夠了，就停止
-        if (dealtCount >= cardsToDeal) break;
+        if (dealtCount >= cardsToDeal) break; // 發夠了就停
 
         const targetId = `b${i}`;
-        // 只有遇到空位才填牌
+        // 只有該格是空的才填入
         if (!gameState.selectedCards[targetId] && remainingDeck.length > 0) {
             const newCard = remainingDeck.pop();
             gameState.selectedCards[targetId] = newCard;
             
-            // 更新畫面 (並強制設定顏色，雙重保險)
+            // 更新 UI (並觸發紅黑變色)
             updateCardUI(targetId);
             
             dealtCount++;
@@ -483,9 +483,9 @@ function dealRandomCommunityCards() {
 
     // 4. 計算勝率 (並傳入特效 callback)
     if (typeof calculateOdds === "function") {
-        // 如果發完之後剛好是 5 張，就傳入特效函式，等算完勝率後自動執行
+        // 只有當公牌發滿 5 張時，才傳入「贏家閃爍特效」函式
         if (boardCount + dealtCount === 5) {
-            calculateOdds(showWinnerEffect); // <--- 這裡是關鍵，把函式當參數傳進去
+            calculateOdds(showWinnerEffect); 
         } else {
             calculateOdds(); // 還沒滿5張，只算勝率不閃爍
         }
