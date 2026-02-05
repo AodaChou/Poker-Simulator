@@ -581,3 +581,17 @@ body {
         transform: scale(1.05);
     }
 }
+
+/* --- 修正卡片顏色顯示 --- */
+.card.red {
+    color: #e63946 !important; /* 強制紅色 */
+}
+
+.card.black {
+    color: #2d3436 !important; /* 強制黑色 */
+}
+
+/* 確保空牌是灰白色的 */
+.card.empty {
+    color: #fff !important;
+}

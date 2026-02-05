@@ -4,21 +4,22 @@
 /**
  * [功能] 計算所有活躍玩家的勝率
  * [原理] 使用蒙特卡羅模擬法，隨機補齊剩餘卡片 3000 次，統計獲勝次數
+ ** [修正版] 支援 callback，算完勝率後才執行後續動作 (例如特效)
  */
-function calculateOdds() {
+function calculateOdds(callback) {
     const activeIds = Object.keys(gameState.activePlayers).map(Number);
-    // 檢查人數，至少需 2 人
     if (activeIds.length < 2) {
         document.getElementById('status-text').innerText = "請至少點擊一位對手標籤加入牌局";
         return;
     }
     document.getElementById('status-text').innerText = `模擬中：${activeIds.length} 人局...`;
-    // 非同步執行模擬，避免 UI 凍結
-    setTimeout(() => runSimulation(activeIds), 50);
+
+    // 傳入 callback 給 runSimulation
+    setTimeout(() => runSimulation(activeIds, callback), 50);
 }
 
-function runSimulation(playerIds) {
-    const iterations = 50000;
+function runSimulation(playerIds, callback) {
+    const iterations = 50000; // 維持你的高次數模擬
     const wins = {};
 
     // 1. 過濾出「真正參與比牌」的玩家 (排除 Fold 的人)
@@ -70,7 +71,7 @@ function runSimulation(playerIds) {
             // 補牌
             if (!c1) c1 = deck.pop();
             if (!c2) c2 = deck.pop();
-
+            // 這裡呼叫你的 getHandScore (確認你的檔案裡有這個函式)
             const score = getHandScore([...board, c1, c2]);
             if (score > bestScore) {
                 bestScore = score;
@@ -100,6 +101,10 @@ function runSimulation(playerIds) {
     });
 
     document.getElementById('status-text').innerText = "計算完成";
+    // [關鍵修改] 如果有傳入 callback (例如 showWinnerEffect)，現在才執行它！
+    if (typeof callback === 'function') {
+        callback();
+    }
 }
 
 function getHandScore(cards) {

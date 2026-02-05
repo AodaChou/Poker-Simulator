@@ -378,7 +378,10 @@ function updateCardVisuals(playerId) {
         if (cardVal && el) {
             el.className = `card ${gameState.foldedPlayers[playerId] ? 'folded' : ''}`;
             const suit = cardVal.slice(-1);
-            el.classList.add(suitColors[suit]);
+            
+            // 確保加入紅/黑 class
+            el.classList.add(suitColors[suit]); 
+            
             el.innerText = cardVal;
         }
     });
@@ -421,6 +424,7 @@ function getIdsInGroup(groupKey) {
  * 3. 4張 -> 發1張 (River) + 算勝率 + 顯示特效
  */
 function dealRandomCommunityCards() {
+    // 1. 準備牌堆
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
     const usedCards = Object.values(gameState.selectedCards);
@@ -432,7 +436,7 @@ function dealRandomCommunityCards() {
         [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
     }
 
-    // 取得目前公牌已發了幾張
+    // 2. 判斷目前階段
     let boardCount = 0;
     for (let i = 0; i < 5; i++) {
         if (gameState.selectedCards[`b${i}`]) boardCount++;
@@ -442,46 +446,49 @@ function dealRandomCommunityCards() {
     let stageName = "";
 
     if (boardCount === 0) {
-        cardsToDeal = 3; // Flop
+        cardsToDeal = 3; // Flop: 發3張
         stageName = "翻牌 (Flop)";
-    } else if (boardCount === 3) {
-        cardsToDeal = 1; // Turn
-        stageName = "轉牌 (Turn)";
-    } else if (boardCount === 4) {
-        cardsToDeal = 1; // River
-        stageName = "河牌 (River)";
+    } else if (boardCount >= 3 && boardCount < 5) {
+        cardsToDeal = 1; // Turn/River: 每次補1張
+        stageName = (boardCount === 3) ? "轉牌 (Turn)" : "河牌 (River)";
     } else if (boardCount === 5) {
         alert("公牌已全數發放完畢。");
         return;
     } else {
-        // 處理玩家手動選了 1 或 2 張的混亂情況，直接補滿到下一個階段
-        if (boardCount < 3) cardsToDeal = 3 - boardCount;
-        else cardsToDeal = 1;
+        // 例外狀況：如果不小心只有1張或2張，補滿到3張
+        cardsToDeal = 3 - boardCount;
+        stageName = "補齊翻牌";
     }
 
-    // 執行發牌
-    let dealtInThisTurn = 0;
-    for (let i = 0; i < 5 && dealtInThisTurn < cardsToDeal; i++) {
+    // 3. 執行發牌 (嚴格迴圈)
+    let dealtCount = 0;
+    for (let i = 0; i < 5; i++) {
+        // 如果已經發夠了，就停止
+        if (dealtCount >= cardsToDeal) break;
+
         const targetId = `b${i}`;
-        if (!gameState.selectedCards[targetId]) {
+        // 只有遇到空位才填牌
+        if (!gameState.selectedCards[targetId] && remainingDeck.length > 0) {
             const newCard = remainingDeck.pop();
             gameState.selectedCards[targetId] = newCard;
-            updateCardUI(targetId); // 確保呼叫單個更新 UI 的函式
-            dealtInThisTurn++;
+            
+            // 更新畫面 (並強制設定顏色，雙重保險)
+            updateCardUI(targetId);
+            
+            dealtCount++;
         }
     }
 
-    // 更新狀態文字
-    document.getElementById('status-text').innerText = `已隨機發出 ${stageName}`;
+    document.getElementById('status-text').innerText = `已發出 ${stageName}`;
 
-    // 自動觸發計算勝率
+    // 4. 計算勝率 (並傳入特效 callback)
     if (typeof calculateOdds === "function") {
-        calculateOdds();
-    }
-
-    // 如果是河牌發完，延遲一下下顯示獲勝特效
-    if (boardCount + dealtInThisTurn === 5) {
-        setTimeout(showWinnerEffect, 800);
+        // 如果發完之後剛好是 5 張，就傳入特效函式，等算完勝率後自動執行
+        if (boardCount + dealtCount === 5) {
+            calculateOdds(showWinnerEffect); // <--- 這裡是關鍵，把函式當參數傳進去
+        } else {
+            calculateOdds(); // 還沒滿5張，只算勝率不閃爍
+        }
     }
 }
 
