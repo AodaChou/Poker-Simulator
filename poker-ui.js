@@ -15,7 +15,7 @@ function initTable() {
 
     for (let i = 1; i <= 9; i++) {
         const seat = document.createElement('div');
-        const isActive = gameState.activePlayers[i];
+        // const isActive = gameState.activePlayers[i];
         const isFolded = gameState.foldedPlayers && gameState.foldedPlayers[i];
         const isGameStarted = Object.keys(gameState.selectedCards).length > 0;
 
