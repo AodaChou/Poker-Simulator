@@ -401,47 +401,46 @@ function togglePlayer(pIndex) {
  * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
  * 修正重點：使用統一的 UI 更新函式，並確保清除贏家特效
  */
+/**
+ * [功能] 重置桌面並自動切換莊家到下一位玩家
+ */
 function resetTable() {
-    // 增加確認對話框
-    if (!confirm("確定要清空桌面上的牌嗎？(玩家座位與莊家設定將保留)")) return;
+    // 增加確認對話框，避免誤觸
+    if (!confirm("確定要結算本局並開始下一局嗎？\n(將清空卡片並自動移動莊家位置)")) return;
 
-    // 1. 【重置數據層】
+    // 1. 清空數據層
     gameState.selectedCards = {};
-    gameState.foldedPlayers = {}; 
+    gameState.foldedPlayers = {};
 
-    // 2. 【清除特效層】
-    // 必須清除上一局留下的贏家金光特效
+    // 2. 清除贏家特效 (金光)
     if (typeof removeWinnerEffects === 'function') {
         removeWinnerEffects();
     }
 
-    // 3. 【同步玩家 UI】
-    // initTable 會根據目前的 gameState 重新繪製 9 個座位
-    // 因為 gameState.selectedCards 已空，手牌會自動變回 "?"，Fold 按鈕也會隱藏
-    initTable();
+    // 3. 【核心修正】順時針移動莊家位
+    rotateDealer();
 
-    // 4. 【同步公牌 UI】
-    // 因為公牌區 (b0-b4) 不在 initTable 的循環內，我們手動觸發同步
+    // 4. 同步 UI 顯示
+    initTable(); // 重新渲染座位與按鈕
+
+    // 手動同步公牌 UI (變回問號)
     for (let i = 0; i < 5; i++) {
         updateCardUI(`b${i}`);
     }
 
-    // 5. 【同步勝率與位置】
-    // 手動清空所有勝率文字顯示
+    // 手動同步所有玩家勝率文字
     for (let i = 1; i <= 9; i++) {
         const winEl = document.getElementById(`win-p${i}`);
         if (winEl) {
             winEl.innerText = '--%';
-            winEl.style.color = ''; 
+            winEl.style.color = '';
         }
     }
-    
-    updatePositions(); // 保持莊家位置正確
 
-    // 6. 更新狀態列
+    // 5. 更新狀態提示
     const statusText = document.getElementById('status-text');
     if (statusText) {
-        statusText.innerText = "桌面已清空，請開始新的一局";
+        statusText.innerText = `進入下一局，莊家已移至 P${gameState.dealerPos}`;
     }
 }
 
@@ -490,4 +489,40 @@ function addBadge(playerId, text, className) {
         span.innerText = text;
         container.appendChild(span);
     }
+}
+
+/**
+ * [功能] 將莊家位置順時針移動到下一位「活躍」玩家
+ */
+function rotateDealer() {
+    // 使用現有的 getNextActivePlayer 尋找下一位沒在休息的人
+    const nextDealer = getNextActivePlayer(gameState.dealerPos);
+    
+    if (nextDealer !== null) {
+        gameState.dealerPos = nextDealer;
+        
+        // 更新位置標籤 (D, SB, BB, UTG)
+        updatePositions();
+        
+        console.log(`莊家已移至: P${nextDealer}`);
+    }
+}
+
+/**
+ * [輔助功能] 尋找下一個「有參加」的玩家 ID (順時針)
+ */
+function getNextActivePlayer(currentId) {
+    let next = currentId + 1;
+    if (next > 9) next = 1;
+
+    let count = 0;
+    // 循環查找 9 次，直到找到一位在 gameState.activePlayers 裡的玩家
+    while (!gameState.activePlayers[next] && count < 9) {
+        next++;
+        if (next > 9) next = 1;
+        count++;
+    }
+
+    // 如果繞了一圈都沒人參加，回傳原點或 null
+    return gameState.activePlayers[next] ? next : null;
 }
