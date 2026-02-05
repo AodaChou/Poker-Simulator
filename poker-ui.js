@@ -20,7 +20,7 @@ function initTable() {
         const isGameStarted = Object.keys(gameState.selectedCards).length > 0;
 
         // Fold 按鈕顯示邏輯
-        const foldBtnStyle = (isActive && isGameStarted) ? "display:inline-block;" : "display:none;";
+        const foldBtnStyle = isActive ? "display:inline-block;" : "display:none;";
         const foldBtnText = isFolded ? "復原" : "Fold";
 
         let labelText = (i === 1) ? "你 (Hero)" : `P${i}`;
@@ -457,32 +457,29 @@ function togglePlayer(pIndex) {
  * 修正重點：使用統一的 UI 更新函式，並確保清除贏家特效
  */
 function resetTable() {
-    // 增加確認對話框
-    if (!confirm("確定要清空桌面上的牌嗎？(玩家座位與莊家設定將保留)")) return;
+    if (!confirm("確定要結算並開始下一局嗎？\n(將清空卡片、重置棄牌並移動莊家)")) return;
 
     // 1. 【重置數據層】
     gameState.selectedCards = {};
-    gameState.foldedPlayers = {}; 
+    gameState.foldedPlayers = {}; // 確保清空棄牌名單
 
-    // 2. 【清除特效層】
-    // 必須清除上一局留下的贏家金光特效
-    if (typeof removeWinnerEffects === 'function') {
-        removeWinnerEffects();
-    }
+    // 2. 【核心功能：順時針換莊】
+    rotateDealer(); 
 
     // 3. 【同步玩家 UI】
-    // initTable 會根據目前的 gameState 重新繪製 9 個座位
-    // 因為 gameState.selectedCards 已空，手牌會自動變回 "?"，Fold 按鈕也會隱藏
+    // 執行 initTable 會重新根據新的 gameState 渲染按鈕
+    // 只要上面第一步改了，Fold 按鈕就會在這裡重新出現
     initTable();
 
     // 4. 【同步公牌 UI】
-    // 因為公牌區 (b0-b4) 不在 initTable 的循環內，我們手動觸發同步
+    // 強制讓公牌變回問號，並確保點擊事件正常
     for (let i = 0; i < 5; i++) {
         updateCardUI(`b${i}`);
     }
 
-    // 5. 【同步勝率與位置】
-    // 手動清空所有勝率文字顯示
+    // 5. 【清除特效與勝率】
+    if (typeof removeWinnerEffects === 'function') removeWinnerEffects();
+    
     for (let i = 1; i <= 9; i++) {
         const winEl = document.getElementById(`win-p${i}`);
         if (winEl) {
@@ -490,13 +487,11 @@ function resetTable() {
             winEl.style.color = ''; 
         }
     }
-    
-    updatePositions(); // 保持莊家位置正確
 
     // 6. 更新狀態列
     const statusText = document.getElementById('status-text');
     if (statusText) {
-        statusText.innerText = "桌面已清空，請開始新的一局";
+        statusText.innerText = `桌面已清空，下一局莊家為 P${gameState.dealerPos}`;
     }
 }
 
@@ -551,17 +546,30 @@ function addBadge(playerId, text, className) {
  * [功能] 將莊家位置順時針移動到下一位「活躍」玩家
  */
 function rotateDealer() {
-    // 使用現有的 getNextActivePlayer 尋找下一位沒在休息的人
-    const nextDealer = getNextActivePlayer(gameState.dealerPos);
-    
-    if (nextDealer !== null) {
-        gameState.dealerPos = nextDealer;
-        
-        // 更新位置標籤 (D, SB, BB, UTG)
-        updatePositions();
-        
-        console.log(`莊家已移至: P${nextDealer}`);
+    let next = gameState.dealerPos + 1;
+    if (next > 9) next = 1;
+
+    let count = 0;
+    // 尋找下一位 activePlayers[next] 為 true 的人
+    while (!gameState.activePlayers[next] && count < 9) {
+        next++;
+        if (next > 9) next = 1;
+        count++;
     }
+    
+    gameState.dealerPos = next;
+    updatePositions(); // 更新 D, SB, BB 標籤
+    // // 使用現有的 getNextActivePlayer 尋找下一位沒在休息的人
+    // const nextDealer = getNextActivePlayer(gameState.dealerPos);
+    
+    // if (nextDealer !== null) {
+    //     gameState.dealerPos = nextDealer;
+        
+    //     // 更新位置標籤 (D, SB, BB, UTG)
+    //     updatePositions();
+        
+    //     console.log(`莊家已移至: P${nextDealer}`);
+    // }
 }
 
 /**
