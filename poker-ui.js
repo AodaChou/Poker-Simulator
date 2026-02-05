@@ -29,9 +29,9 @@ function initTable() {
 
         seat.className = `seat s${i} ${isActive ? 'active' : ''}`;
         seat.id = `seat-p${i}`;
-        
+
         // 點擊座位可開啟該玩家的選牌 (整組)
-        seat.setAttribute('onclick', `openSelector('p${i}c1')`); 
+        seat.setAttribute('onclick', `openSelector('p${i}c1')`);
 
         seat.innerHTML = `
             <div class="seat-label" onclick="event.stopPropagation();">
@@ -84,7 +84,7 @@ function openSelector(targetId) {
         groupKey = 'board';
     }
 
-    gameState.activeGroup = groupKey; 
+    gameState.activeGroup = groupKey;
 
     // 2. 自動跳轉到該群組的第一個空位 (UX 優化)
     // 如果使用者點的是 p1c2 但 p1c1 是空的，自動跳回 p1c1
@@ -174,11 +174,11 @@ function handleCardClick(cardStr, isUsed, usedById, isOwnedByMe) {
     if (targetId) {
         gameState.selectedCards[targetId] = cardStr;
         updateCardUI(targetId);
-        
+
         // 選完這張，自動跳去下一張空格
         autoSetTargetToFirstEmpty();
         renderSelector();
-        
+
         // [關鍵修復]：選牌後計算勝率，並檢查是否需要「閃爍金光」
         if (typeof calculateOdds === 'function') {
             calculateOdds(() => {
@@ -216,10 +216,10 @@ function dealRandomCommunityCards() {
     let stageName = "";
 
     if (boardCount === 0) {
-        cardsToDeal = 3; 
+        cardsToDeal = 3;
         stageName = "翻牌 (Flop)";
     } else if (boardCount >= 3 && boardCount < 5) {
-        cardsToDeal = 1; 
+        cardsToDeal = 1;
         stageName = (boardCount === 3) ? "轉牌 (Turn)" : "河牌 (River)";
     } else if (boardCount === 5) {
         alert("公牌已全數發放完畢。");
@@ -331,7 +331,7 @@ function closeSelector() {
 // 自動將目標設定為該群組的第一個空位
 function autoSetTargetToFirstEmpty(clickTargetId) {
     const groupIds = getIdsInGroup(gameState.activeGroup);
-    
+
     // 如果傳入的點擊目標本身就是空的，優先選它
     if (clickTargetId && !gameState.selectedCards[clickTargetId]) {
         gameState.currentPickingTarget = clickTargetId;
@@ -386,7 +386,7 @@ function toggleFold(playerId) {
 function togglePlayer(pIndex) {
     if (pIndex === 1) return;
     const seat = document.getElementById(`seat-p${pIndex}`);
-    
+
     if (gameState.activePlayers[pIndex]) {
         delete gameState.activePlayers[pIndex];
         delete gameState.selectedCards[`p${pIndex}c1`];
@@ -400,15 +400,29 @@ function togglePlayer(pIndex) {
 // 清空桌面
 function resetTable() {
     if (!confirm("確定要清空桌面上的牌嗎？")) return;
+
+    // 1. 清空所有數據資料
     gameState.selectedCards = {};
-    gameState.foldedPlayers = {}; 
-    removeWinnerEffects(); // 清除特效
-    
+    gameState.foldedPlayers = {};
+
+    // 2. 清除贏家金光特效
+    removeWinnerEffects();
+
+    // 3. 重新渲染玩家座位 (處理玩家手牌 UI)
     initTable();
+
+    // 4. [關鍵修正] 手動清空 5 張公牌的 UI 顯示
+    for (let i = 0; i < 5; i++) {
+        updateCardUI(`b${i}`);
+    }
+
+    // 5. 更新按鈕位置與狀態文字
     updatePositions();
-    
+
     const statusText = document.getElementById('status-text');
-    if (statusText) statusText.innerText = "桌面已清空";
+    if (statusText) {
+        statusText.innerText = "桌面已清空，請重新選牌";
+    }
 }
 
 // 更新位置標籤 (D/SB/BB)
@@ -416,16 +430,16 @@ function updatePositions() {
     // 清除舊標籤
     for (let i = 1; i <= 9; i++) {
         const badge = document.getElementById(`badge-p${i}`);
-        if(badge) badge.innerHTML = '';
+        if (badge) badge.innerHTML = '';
     }
 
-    const activeIds = Object.keys(gameState.activePlayers).map(Number).sort((a,b)=>a-b);
+    const activeIds = Object.keys(gameState.activePlayers).map(Number).sort((a, b) => a - b);
     if (activeIds.length < 2) return;
 
     if (!gameState.dealerPos || !gameState.activePlayers[gameState.dealerPos]) {
         gameState.dealerPos = activeIds[0];
     }
-    
+
     const dealer = gameState.dealerPos;
     addBadge(dealer, 'D', 'pos-d');
 
