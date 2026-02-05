@@ -354,11 +354,13 @@ function updateCardUI(elementId) {
     const el = document.getElementById(elementId);
     const cardVal = gameState.selectedCards[elementId];
 
-    if (cardVal) {
+    if (el && cardVal) {
         el.innerText = cardVal;
         el.style.color = suitColors[cardVal.slice(-1)];
         el.classList.remove('empty');
         el.style.background = "white";
+        const suit = cardVal.slice(-1);
+        el.className = `card ${suitColors[suit]}`; // 這會套用紅或黑
     } else {
         el.innerText = "?";
         el.style.color = "white";
@@ -412,44 +414,74 @@ function getIdsInGroup(groupKey) {
 /**
  * [功能] 隨機補齊剩餘的公牌 (支援自動與混合模式)
  */
+/**
+ * [功能] 智慧階段式隨機發公牌
+ * 1. 0張 -> 發3張 (Flop) + 算勝率
+ * 2. 3張 -> 發1張 (Turn) + 算勝率
+ * 3. 4張 -> 發1張 (River) + 算勝率 + 顯示特效
+ */
 function dealRandomCommunityCards() {
-    // 1. 準備牌堆
     const fullDeck = [];
     suits.forEach(s => values.forEach(v => fullDeck.push(v + s)));
-
-    // 2. 過濾已使用的牌
     const usedCards = Object.values(gameState.selectedCards);
     let remainingDeck = fullDeck.filter(card => !usedCards.includes(card));
 
-    // 3. 洗牌
+    // 洗牌
     for (let i = remainingDeck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [remainingDeck[i], remainingDeck[j]] = [remainingDeck[j], remainingDeck[i]];
     }
 
-    let changed = false;
-    // 4. 發牌
+    // 取得目前公牌已發了幾張
+    let boardCount = 0;
     for (let i = 0; i < 5; i++) {
+        if (gameState.selectedCards[`b${i}`]) boardCount++;
+    }
+
+    let cardsToDeal = 0;
+    let stageName = "";
+
+    if (boardCount === 0) {
+        cardsToDeal = 3; // Flop
+        stageName = "翻牌 (Flop)";
+    } else if (boardCount === 3) {
+        cardsToDeal = 1; // Turn
+        stageName = "轉牌 (Turn)";
+    } else if (boardCount === 4) {
+        cardsToDeal = 1; // River
+        stageName = "河牌 (River)";
+    } else if (boardCount === 5) {
+        alert("公牌已全數發放完畢。");
+        return;
+    } else {
+        // 處理玩家手動選了 1 或 2 張的混亂情況，直接補滿到下一個階段
+        if (boardCount < 3) cardsToDeal = 3 - boardCount;
+        else cardsToDeal = 1;
+    }
+
+    // 執行發牌
+    let dealtInThisTurn = 0;
+    for (let i = 0; i < 5 && dealtInThisTurn < cardsToDeal; i++) {
         const targetId = `b${i}`;
-        // 如果這個位置沒牌，才補牌
         if (!gameState.selectedCards[targetId]) {
-            if (remainingDeck.length > 0) {
-                // A. 先更新資料狀態 (這是關鍵)
-                gameState.selectedCards[targetId] = remainingDeck.pop();
-
-                // B. 呼叫原本的更新函式 (它會自己去讀 gameState)
-                updateCardUI(targetId);
-
-                changed = true;
-            }
+            const newCard = remainingDeck.pop();
+            gameState.selectedCards[targetId] = newCard;
+            updateCardUI(targetId); // 確保呼叫單個更新 UI 的函式
+            dealtInThisTurn++;
         }
     }
 
-    if (changed) {
-        initTable();
-        document.getElementById('status-text').innerText = "公牌已隨機補齊";
-    } else {
-        alert("公牌已滿，無需發牌。如欲重新開始，請按重置。");
+    // 更新狀態文字
+    document.getElementById('status-text').innerText = `已隨機發出 ${stageName}`;
+
+    // 自動觸發計算勝率
+    if (typeof calculateOdds === "function") {
+        calculateOdds();
+    }
+
+    // 如果是河牌發完，延遲一下下顯示獲勝特效
+    if (boardCount + dealtInThisTurn === 5) {
+        setTimeout(showWinnerEffect, 800);
     }
 }
 
@@ -521,4 +553,36 @@ function getNextActivePlayer(currentId) {
 
     // 如果找不到其他人 (例如只有一人在場)，回傳自己或 null
     return gameState.activePlayers[next] ? next : null;
+}
+
+/**
+ * [功能] 在 River 階段為最高勝率（獲勝者）加上閃爍特效
+ */
+function showWinnerEffect() {
+    let maxWin = -1;
+    let winners = [];
+
+    // 找出畫面上勝率最高的人
+    for (let i = 1; i <= 9; i++) {
+        const winEl = document.getElementById(`win-p${i}`);
+        if (winEl && winEl.innerText !== '--%') {
+            const prob = parseFloat(winEl.innerText);
+            if (prob > maxWin) {
+                maxWin = prob;
+                winners = [i];
+            } else if (prob === maxWin) {
+                winners.push(i);
+            }
+        }
+    }
+
+    // 為贏家座位加上 CSS 特效
+    winners.forEach(id => {
+        const seat = document.querySelector(`.seat[data-id="${id}"]`);
+        if (seat) {
+            seat.classList.add('winner-flash');
+            // 3秒後移除特效，方便下一局
+            setTimeout(() => seat.classList.remove('winner-flash'), 3000);
+        }
+    });
 }
