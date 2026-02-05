@@ -397,31 +397,51 @@ function togglePlayer(pIndex) {
     initTable();
 }
 
-// 清空桌面
+/**
+ * [功能] 清空桌面上的卡片與勝率，但保留玩家座位與莊家設定
+ * 修正重點：使用統一的 UI 更新函式，並確保清除贏家特效
+ */
 function resetTable() {
-    if (!confirm("確定要清空桌面上的牌嗎？")) return;
+    // 增加確認對話框
+    if (!confirm("確定要清空桌面上的牌嗎？(玩家座位與莊家設定將保留)")) return;
 
-    // 1. 清空所有數據資料
+    // 1. 【重置數據層】
     gameState.selectedCards = {};
-    gameState.foldedPlayers = {};
+    gameState.foldedPlayers = {}; 
 
-    // 2. 清除贏家金光特效
-    removeWinnerEffects();
+    // 2. 【清除特效層】
+    // 必須清除上一局留下的贏家金光特效
+    if (typeof removeWinnerEffects === 'function') {
+        removeWinnerEffects();
+    }
 
-    // 3. 重新渲染玩家座位 (處理玩家手牌 UI)
+    // 3. 【同步玩家 UI】
+    // initTable 會根據目前的 gameState 重新繪製 9 個座位
+    // 因為 gameState.selectedCards 已空，手牌會自動變回 "?"，Fold 按鈕也會隱藏
     initTable();
 
-    // 4. [關鍵修正] 手動清空 5 張公牌的 UI 顯示
+    // 4. 【同步公牌 UI】
+    // 因為公牌區 (b0-b4) 不在 initTable 的循環內，我們手動觸發同步
     for (let i = 0; i < 5; i++) {
         updateCardUI(`b${i}`);
     }
 
-    // 5. 更新按鈕位置與狀態文字
-    updatePositions();
+    // 5. 【同步勝率與位置】
+    // 手動清空所有勝率文字顯示
+    for (let i = 1; i <= 9; i++) {
+        const winEl = document.getElementById(`win-p${i}`);
+        if (winEl) {
+            winEl.innerText = '--%';
+            winEl.style.color = ''; 
+        }
+    }
+    
+    updatePositions(); // 保持莊家位置正確
 
+    // 6. 更新狀態列
     const statusText = document.getElementById('status-text');
     if (statusText) {
-        statusText.innerText = "桌面已清空，請重新選牌";
+        statusText.innerText = "桌面已清空，請開始新的一局";
     }
 }
 
